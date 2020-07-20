@@ -1,0 +1,22 @@
+[package]
+name = "browser-selector"
+version = "0.1.0"
+authors = ["Alex Culea <16594531+alexculea@users.noreply.github.com>"]
+edition = "2018"
+
+[dependencies]
+winit = "0.22.2"
+winrt = "0.7.0"
+winapi = { version = "0.3.8", features = ["winuser", "roapi"] }
+bindings = { path = "bindings" }
+raw-window-handle = "0.3.3"
+simple-error = "0.2.1"
+
+[build-dependencies]
+embed-resource = "1.3"
+
+# [build-dependencies]
+#winrt =  { git = "https://github.com/microsoft/winrt-rs" }
+
+# [package.metadata.nuget_dependencies]
+# "Microsoft.UI.Xaml" = "2.4.2"
