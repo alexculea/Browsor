@@ -29,3 +29,32 @@ Choose the browser you will run any time a link is opened from a click or any ot
 ### Resources for future implementations
 https://stackoverflow.com/questions/62107050/how-can-i-create-a-messagedialog-using-winrt-rs
 https://blogs.windows.com/windowsdeveloper/2019/04/30/enhancing-non-packaged-desktop-apps-using-windows-runtime-components/
+
+
+#### XML Files UI 
+Makes a control from .xml file.
+```C++
+winrt::Windows::UI::Xaml::UIElement LoadXamlControl(uint32_t id)
+{
+    auto rc = ::FindResource(nullptr, MAKEINTRESOURCE(id), MAKEINTRESOURCE(XAMLRESOURCE));
+    if (!rc)
+    {
+        winrt::check_hresult(HRESULT_FROM_WIN32(GetLastError()));
+    }
+    HGLOBAL rcData = ::LoadResource(nullptr, rc);
+    if (!rcData)
+    {
+        winrt::check_hresult(HRESULT_FROM_WIN32(GetLastError()));
+    }
+    auto pData = static_cast<wchar_t*>(::LockResource(rcData));
+    auto content = winrt::Windows::UI::Xaml::Markup::XamlReader::Load(winrt::get_abi(pData));
+    auto uiElement = content.as<winrt::Windows::UI::Xaml::UIElement>();
+    return uiElement;
+}
+```
+taken from <https://github.com/microsoft/Xaml-Islands-Samples/tree/master/Samples/Win32/SampleCppApp>
+
+
+#### Loading an WinRT Image from a incon 
+
+<https://stackoverflow.com/questions/32122679/getting-icon-of-modern-windows-app-from-a-desktop-application>
