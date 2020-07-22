@@ -10,11 +10,17 @@ winrt::build!(
       windows::foundation::{PropertyValue}
       windows::ui::xaml::{UIElement, RoutedEventHandler, Thickness}
       windows::ui::xaml::controls::{
-        Button, IButtonFactory, IRelativePanelFactory, RelativePanel, ListBox, IListBoxFactory, TextBlock,
+        Button, IButtonFactory, 
+        IRelativePanelFactory, RelativePanel, 
+        ListBox, IListBoxFactory, 
+        TextBlock, 
+        IListViewFactory, ListView, ListViewSelectionMode,
+        IStackPanelFactory,
+        StackPanel,
       }
       windows::ui::xaml::hosting::{
-        DesktopWindowXamlSource, 
-        IDesktopWindowXamlSourceFactory, 
+        DesktopWindowXamlSource,
+        IDesktopWindowXamlSourceFactory,
         WindowsXamlManager
       }
       // windows::ui::popups::*

@@ -7,9 +7,11 @@ mod wrt {
 
   pub use bindings::windows::foundation::PropertyValue;
   pub use bindings::windows::ui::xaml::controls::{
-    Button, IButtonFactory, IListBoxFactory, IRelativePanelFactory, ListBox, RelativePanel, TextBlock,
+    Button, IButtonFactory, IListBoxFactory, IListViewFactory, IRelativePanelFactory,
+    IStackPanelFactory, ListBox, ListView, ListViewSelectionMode, RelativePanel, StackPanel,
+    TextBlock,
   };
-  pub use bindings::windows::ui::xaml::{Thickness, RoutedEventHandler};
+  pub use bindings::windows::ui::xaml::{RoutedEventHandler, Thickness, UIElement};
 }
 
 use winapi::shared::windef::HWND;
@@ -20,6 +22,12 @@ use winit::event_loop::EventLoopProxy;
 // use crate::initialize_with_window::*;
 use crate::desktop_window_xaml_source::IDesktopWindowXamlSourceNative;
 use crate::util::get_hwnd;
+
+#[derive(Debug)]
+pub enum BSEvent {
+  BrowserSelected(u32),
+  Close,
+}
 
 pub struct XamlIslandWindow {
   pub hwnd_parent: *mut std::ffi::c_void,
@@ -52,6 +60,18 @@ impl Default for XamlIslandWindow {
       }
     }
   }
+}
+
+pub struct ListItem<'a> {
+  pub title: &'a String,
+  pub subtitle: &'a String,
+}
+
+pub struct UI<'a> {
+  pub xaml_isle: &'a XamlIslandWindow,
+  pub event_loop: &'a winit::event_loop::EventLoopProxy<BSEvent>,
+  pub browser_list: &'a Vec<ListItem<'a>>,
+  pub url: &'a String,
 }
 
 pub fn init_win_ui_xaml(xaml_isle: &mut XamlIslandWindow) -> winrt::Result<()> {
@@ -98,12 +118,6 @@ pub fn update_xaml_island_size(
   Ok(())
 }
 
-#[derive(Debug)]
-pub enum BSEvent {
-  BrowserSelected(u32),
-  Close,
-}
-
 pub fn create_dummy_ui(
   xaml_isle: &XamlIslandWindow,
   ev_loop: winit::event_loop::EventLoopProxy<BSEvent>,
@@ -129,33 +143,86 @@ pub fn create_dummy_ui(
   Ok(())
 }
 
+pub fn create_ui(ui: &UI) -> winrt::Result<wrt::UIElement> {
+  let ui_container = winrt::factory::<wrt::StackPanel, wrt::IStackPanelFactory>()?
+    .create_instance(winrt::Object::default(), &mut winrt::Object::default())?;
+  ui_container.set_margin(wrt::Thickness {
+    top: 15.,
+    left: 15.,
+    right: 15.,
+    bottom: 15.,
+  })?;
+
+  let call_to_action_top_row = wrt::TextBlock::new()?;
+  let call_to_action_bottom_row = wrt::TextBlock::new()?;
+  call_to_action_top_row.set_text("You are about to open URL:");
+  call_to_action_bottom_row.set_text(ui.url as &str);
+  ui_container.children()?.append(call_to_action_top_row);
+  ui_container.children()?.append(call_to_action_bottom_row);
+
+  let list = create_list(ui.xaml_isle, ui.event_loop, ui.browser_list)?;
+  ui_container.children()?.append(list);
+
+  Ok(ui_container.into())
+}
+
+pub fn create_list_item(title: &String, subtext: &String) -> winrt::Result<wrt::UIElement> {
+  let list_item_margins = wrt::Thickness {
+    top: 15.,
+    left: 15.,
+    right: 15.,
+    bottom: 15.,
+  };
+  let stack_panel = winrt::factory::<wrt::StackPanel, wrt::IStackPanelFactory>()?
+    .create_instance(winrt::Object::default(), &mut winrt::Object::default())?;
+  stack_panel.set_margin(&list_item_margins);
+
+  let title_block = wrt::TextBlock::new()?;
+  title_block.set_text(title as &str);
+
+  let subtitle_block = wrt::TextBlock::new()?;
+  subtitle_block.set_text(subtext as &str)?;
+
+  stack_panel.children()?.append(title_block);
+  stack_panel.children()?.append(subtitle_block);
+  Ok(stack_panel.into())
+}
+
 pub fn create_list(
   xaml: &XamlIslandWindow,
-  ev_loop: EventLoopProxy<BSEvent>,
-  list: Vec<String>,
-) -> winrt::Result<()> {
-  let container = winrt::factory::<wrt::RelativePanel, wrt::IRelativePanelFactory>()?
+  ev_loop: &EventLoopProxy<BSEvent>,
+  list: &Vec<ListItem>,
+) -> winrt::Result<wrt::UIElement> {
+  struct ListPos {
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+  };
+  let list_pos = ListPos {
+    x: 0.,
+    y: 0.,
+    width: 500.,
+    height: 200.,
+  };
+
+  let list_control = winrt::factory::<wrt::ListView, wrt::IListViewFactory>()?
     .create_instance(winrt::Object::default(), &mut winrt::Object::default())?;
-
-  let list_control = winrt::factory::<wrt::ListBox, wrt::IListBoxFactory>()?.create_instance(winrt::Object::default(), &mut winrt::Object::default())?;
-  container.set_margin(wrt::Thickness {
-    top: 10., left: 10., right: 10., bottom: 10.
+  list_control.set_margin(wrt::Thickness {
+    top: 15.,
+    left: 0.,
+    right: 0.,
+    bottom: 0.,
   })?;
-  // wrt::RelativePanel::set_align_horizontal_center_with_panel(&list_control, true)?;
-  // wrt::RelativePanel::set_align_vertical_center_with_panel(&list_control, true)?;
+  list_control.set_selection_mode(wrt::ListViewSelectionMode::Single);
 
-  for browser in list {
-    let tb = wrt::TextBlock::new()?;
-    let text: &str = &browser;
-    tb.set_text(text);
-    list_control.items()?.append(winrt::Object::from(tb))?;
+  for item in list {
+    let item = create_list_item(item.title, item.subtitle)?;
+    list_control.items()?.append(winrt::Object::from(item))?;
   }
-  
-  container.children()?.append(&list_control);
-  container.update_layout()?;
-  xaml.desktop_source.set_content(container)?;
+  list_control.set_selected_index(0);
 
-  Ok(())
+  Ok(list_control.into())
 }
 
 //

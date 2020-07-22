@@ -2,7 +2,6 @@
 extern crate simple_error;
 
 mod desktop_window_xaml_source;
-mod initialize_with_window;
 mod os_browsers;
 mod ui;
 mod util;
@@ -12,10 +11,6 @@ use winit::{
     event_loop::{ControlFlow, EventLoop},
     window::WindowBuilder,
 };
-
-use initialize_with_window::*;
-use raw_window_handle::HasRawWindowHandle;
-use winrt::*;
 
 fn main() {
     unsafe {
@@ -35,7 +30,6 @@ fn main() {
     let event_loop = EventLoop::with_user_event();
     let event_loop_proxy = event_loop.create_proxy();
     let window = WindowBuilder::new()
-        .with_decorations(false)
         .build(&event_loop)
         .unwrap();
 
@@ -52,13 +46,19 @@ fn main() {
     let browsers: Vec<os_browsers::Browser> =
         os_browsers::read_system_browsers_sync().expect("Could not read browser list");
 
-    let list_items: Vec<String> = browsers
+    let list_items: Vec<ui::ListItem> = browsers
         .iter()
-        .map(move | browser_entry | { format!("{} ({})", browser_entry.name, browser_entry.version) } )
+        .map(move | browser_entry | { ui::ListItem { title: &browser_entry.name, subtitle: &browser_entry.version } } )
         .rev()
         .collect();
 
-    ui::create_list(&xaml_isle, event_loop_proxy, list_items);
+    let ui_container = ui::create_ui(&ui::UI { 
+        browser_list: &list_items,
+        event_loop: &event_loop_proxy,
+        xaml_isle: &xaml_isle,
+        url: &url,
+    }).expect("Unable to create UI.");
+    xaml_isle.desktop_source.set_content(ui_container).unwrap();
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Wait;
