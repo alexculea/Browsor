@@ -27,3 +27,16 @@ pub fn hide_window(window: &winit::window::Window) {
     winapi::um::winuser::ShowWindow(get_hwnd(window), winapi::um::winuser::SW_HIDE);
   }
 }
+
+
+pub fn str_to_wide(string: &str) -> Vec<u16> {
+  use std::ffi::OsStr;
+  use std::os::windows::ffi::OsStrExt;
+  use std::iter::once;
+
+  OsStr::new(string).encode_wide().chain(once(0)).collect()
+}
+
+pub fn wide_to_str(buf: &Vec<u16>) -> String {
+  String::from_utf16_lossy(&buf)
+}

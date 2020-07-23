@@ -48,7 +48,7 @@ fn main() {
 
     let list_items: Vec<ui::ListItem> = browsers
         .iter()
-        .map(move | browser_entry | { ui::ListItem { title: &browser_entry.name, subtitle: &browser_entry.version } } )
+        .map(move | browser_entry | { ui::ListItem { title: &browser_entry.name, subtitle: "Version placeholder" } } )
         .rev()
         .collect();
 

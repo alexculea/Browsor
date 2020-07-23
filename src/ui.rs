@@ -63,8 +63,8 @@ impl Default for XamlIslandWindow {
 }
 
 pub struct ListItem<'a> {
-  pub title: &'a String,
-  pub subtitle: &'a String,
+  pub title: &'a str,
+  pub subtitle: &'a str,
 }
 
 pub struct UI<'a> {
@@ -166,7 +166,7 @@ pub fn create_ui(ui: &UI) -> winrt::Result<wrt::UIElement> {
   Ok(ui_container.into())
 }
 
-pub fn create_list_item(title: &String, subtext: &String) -> winrt::Result<wrt::UIElement> {
+pub fn create_list_item(title: &str, subtext: &str) -> winrt::Result<wrt::UIElement> {
   let list_item_margins = wrt::Thickness {
     top: 15.,
     left: 15.,

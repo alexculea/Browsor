@@ -64,6 +64,7 @@ dependencies = [
  "simple-error",
  "winapi 0.3.8",
  "winit",
+ "winreg 0.7.0",
  "winrt",
 ]
 
@@ -200,7 +201,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f6b0b4403da80c2fd32333937dd468292c001d778c587ae759b75432772715d"
 dependencies = [
  "vswhom",
- "winreg",
+ "winreg 0.6.2",
 ]
 
 [[package]]
@@ -909,6 +910,15 @@ name = "winreg"
 version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b2986deb581c4fe11b621998a5e53361efe6b48a151178d0cd9eeffa4dc6acc9"
+dependencies = [
+ "winapi 0.3.8",
+]
+
+[[package]]
+name = "winreg"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0120db82e8a1e0b9fb3345a539c478767c0048d842860994d96113d5b667bd69"
 dependencies = [
  "winapi 0.3.8",
 ]
