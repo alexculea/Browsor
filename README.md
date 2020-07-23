@@ -58,3 +58,23 @@ taken from <https://github.com/microsoft/Xaml-Islands-Samples/tree/master/Sample
 #### Loading an WinRT Image from a incon 
 
 <https://stackoverflow.com/questions/32122679/getting-icon-of-modern-windows-app-from-a-desktop-application>
+
+
+### Get Icon from file?
+https://docs.microsoft.com/en-us/windows/win32/api/shellapi/nf-shellapi-shgetfileinfoa
+
+
+### Receive strings from winapi
+
+```Rust
+let mut v: Vec<u16> = Vec::with_capacity(255);
+unsafe {
+    let read_len = user32::GetWindowTextW(
+        handle as winapi::HWND,
+        v.as_mut_ptr(),
+        v.capacity(),
+    );
+    v.set_len(read_len); // this is undefined behavior if read_len > v.capacity()
+    String::from_utf16_lossy(&v)
+}
+```
