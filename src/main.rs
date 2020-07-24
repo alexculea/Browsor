@@ -1,6 +1,9 @@
 #[macro_use]
 extern crate simple_error;
 
+#[macro_use]
+extern crate winapi;
+
 mod desktop_window_xaml_source;
 mod os_browsers;
 mod ui;

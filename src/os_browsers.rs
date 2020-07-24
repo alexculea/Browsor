@@ -1,11 +1,31 @@
 use simple_error::{SimpleResult as Result};
 mod winapi {
+
+
+  pub use ::winapi::shared::minwindef::DWORD;
   pub use ::winapi::um::winbase::{GetBinaryTypeW};
   pub use ::winapi::um::winver::{
     GetFileVersionInfoSizeW,
     GetFileVersionInfoW, 
     VerQueryValueW
   };
+
+  STRUCT! {struct VS_FIXEDFILEINFO {
+      dwSignature: DWORD,
+      dwStrucVersion: DWORD,
+      dwFileVersionMS: DWORD,
+      dwFileVersionLS: DWORD,
+      dwProductVersionMS: DWORD,
+      dwProductVersionLS: DWORD,
+      dwFileFlagsMask: DWORD,
+      dwFileFlags: DWORD,
+      dwFileOS: DWORD,
+      dwFileType: DWORD,
+      dwFileSubtype: DWORD,
+      dwFileDateMS: DWORD,
+      dwFileDateLS: DWORD,
+    }
+  } 
 }
 
 
@@ -163,14 +183,23 @@ pub fn read_browser_exe_version_info(path: &str) -> Result<VersionInfo> {
     }
 
     // pointer holding mem position within buffer above to the requested info
-    let mut buffer_pointer: *mut std::ffi::c_void = std::ptr::null_mut();
+    let mut buffer_pointer: *mut std::vec::Vec<u8> = std::ptr::null_mut();
     let mut size = 0;
-    let version_info_prop = crate::util::str_to_wide("\\StringFileInfo\\ProductVersion");
-    let result = winapi::VerQueryValueW(buffer.as_mut_ptr() as *mut std::ffi::c_void, version_info_prop.as_ptr(), &mut buffer_pointer, &mut size);
-    if result > 0 && size > 0 {
-      let mut prd_ver: Vec<u16> = Vec::with_capacity(size as usize);
-      std::ptr::copy(buffer_pointer, prd_ver.as_mut_ptr() as *mut std::ffi::c_void, size as usize);
-      product_version = crate::util::wide_to_str(&prd_ver);
+    let version_info_prop = crate::util::str_to_wide("\\");
+    
+    // ToDO: Fix VerQueryValue call
+    // Issue: GetFileVersionInfo above appears to be returning correctly
+    // Check that: 
+    // -- buffer above is filled with data
+    // -- why buffer_pointer is left as NULL by VerQueryValue instead of being filled with the correct info
+    let result = winapi::VerQueryValueW(buffer.as_mut_ptr() as *mut std::ffi::c_void, version_info_prop.as_ptr(), &mut (buffer_pointer as *mut std::ffi::c_void), &mut size);
+    if result > 0 && size > 0 && buffer_pointer != std::ptr::null_mut() {
+      let mut prd_ver: Vec<u8> = Vec::with_capacity(size as usize);
+      // std::ptr::copy(buffer_pointer, prd_ver.as_mut_ptr() as *mut std::ffi::c_void, size as usize);
+      let vs_fixed_file_info: winapi::VS_FIXEDFILEINFO = std::mem::transmute_copy(&buffer_pointer);
+      let string_raw: &str = std::mem::transmute_copy(&buffer_pointer);
+
+      println!("{:?}", string_raw);
     }
   }
 
