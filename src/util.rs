@@ -10,6 +10,8 @@ pub unsafe fn initialize_runtime_com() -> winrt::Result<()> {
     return winrt::Result::Ok(());
   }
 
+  winapi::um::combaseapi::CoInitializeEx(std::ptr::null_mut(), 0x2);
+
   return Err(winrt::Error::from(result));
 }
 

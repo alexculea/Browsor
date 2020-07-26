@@ -17,6 +17,7 @@ winrt::build!(
         IListViewFactory, ListView, ListViewSelectionMode,
         IStackPanelFactory,
         StackPanel,
+        Image
       }
       windows::ui::xaml::hosting::{
         DesktopWindowXamlSource,
