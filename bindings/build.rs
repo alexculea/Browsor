@@ -8,7 +8,10 @@ winrt::build!(
       os
   types
       windows::foundation::{PropertyValue}
-      windows::ui::xaml::{UIElement, RoutedEventHandler, Thickness}
+      windows::storage::streams::{
+        DataWriter, IDataWriterFactory, IBuffer
+      },
+      windows::ui::xaml::{UIElement, RoutedEventHandler, Thickness},
       windows::ui::xaml::controls::{
         Button, IButtonFactory, 
         IRelativePanelFactory, RelativePanel, 
@@ -18,13 +21,18 @@ winrt::build!(
         IStackPanelFactory,
         StackPanel,
         Image
-      }
+      },
+      windows::ui::xaml::media::imaging::{
+        SoftwareBitmapSource
+      },
       windows::ui::xaml::hosting::{
         DesktopWindowXamlSource,
         IDesktopWindowXamlSourceFactory,
         WindowsXamlManager
+      },
+      windows::graphics::imaging::{
+        SoftwareBitmap, ISoftwareBitmapFactory, BitmapPixelFormat
       }
-      // windows::ui::popups::*
 );
 
 fn main() {

@@ -20,7 +20,7 @@ pub fn get_hwnd(window: &winit::window::Window) -> winapi::shared::windef::HWND 
     raw_window_handle::RawWindowHandle::Windows(wnd_handle) => {
       wnd_handle.hwnd as winapi::shared::windef::HWND
     }
-    _ => panic!("No MSFT Windows specific window handle. Wrong platform?"),
+    _ => panic!("No MS Windows specific window handle. Wrong platform?"),
   }
 }
 

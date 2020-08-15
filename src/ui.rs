@@ -1,17 +1,27 @@
-/* For clarity purposes keep all WinRT imports under wrt:: */
-/* winrt is a different crate dealing with types for calling the imported resources */
+// For clarity purposes keep all WinRT imports under wrt:: 
+// winrt is a different crate dealing with types for calling the imported resources
+// TODO: Find a better name rather than `wrt` to avoid confusion btw `wrt` and `winrt`
 mod wrt {
-  pub use bindings::windows::ui::xaml::hosting::{
-    DesktopWindowXamlSource, IDesktopWindowXamlSourceFactory, WindowsXamlManager,
-  };
+    pub use bindings::windows::ui::xaml::hosting::{
+        DesktopWindowXamlSource, IDesktopWindowXamlSourceFactory, WindowsXamlManager,
+    };
 
-  pub use bindings::windows::foundation::PropertyValue;
-  pub use bindings::windows::ui::xaml::controls::{
-    Button, IButtonFactory, IListBoxFactory, IListViewFactory, IRelativePanelFactory,
-    IStackPanelFactory, ListBox, ListView, ListViewSelectionMode, RelativePanel, StackPanel,
-    TextBlock,
-  };
-  pub use bindings::windows::ui::xaml::{RoutedEventHandler, Thickness, UIElement};
+    pub use bindings::windows::storage::streams::{
+        DataWriter, IDataWriterFactory, IBuffer,
+    };
+
+    pub use bindings::windows::foundation::PropertyValue;
+    pub use bindings::windows::ui::xaml::controls::{
+        Button, IButtonFactory, IListBoxFactory, IListViewFactory, IRelativePanelFactory,
+        IStackPanelFactory, ListBox, ListView, ListViewSelectionMode, RelativePanel, StackPanel,
+        TextBlock,
+        Image
+    };
+    pub use bindings::windows::ui::xaml::{RoutedEventHandler, Thickness, UIElement};
+    pub use bindings::windows::ui::xaml::media::imaging::{SoftwareBitmapSource};
+    pub use bindings::windows::graphics::imaging::{
+        SoftwareBitmap, ISoftwareBitmapFactory, BitmapPixelFormat,
+    };
 }
 
 use winapi::shared::windef::HWND;
@@ -25,204 +35,238 @@ use crate::util::get_hwnd;
 
 #[derive(Debug)]
 pub enum BSEvent {
-  BrowserSelected(u32),
-  Close,
+    BrowserSelected(u32),
+    Close,
 }
 
 pub struct XamlIslandWindow {
-  pub hwnd_parent: *mut std::ffi::c_void,
+    pub hwnd_parent: *mut std::ffi::c_void,
 
-  // the container that draws the DirectComposition stuff to render
-  // the modern Windows UI
-  pub hwnd: *mut std::ffi::c_void,
+    // the container that draws the DirectComposition stuff to render
+    // the modern Windows UI
+    pub hwnd: *mut std::ffi::c_void,
 
-  // COM class having the DirectComposition resources
-  // has to be initialized first and destroyed last
-  pub win_xaml_mgr: wrt::WindowsXamlManager,
+    // COM class having the DirectComposition resources
+    // has to be initialized first and destroyed last
+    pub win_xaml_mgr: wrt::WindowsXamlManager,
 
-  // DesktopWindowXamlSource COM base class
-  pub desktop_source: wrt::DesktopWindowXamlSource,
+    // DesktopWindowXamlSource COM base class
+    pub desktop_source: wrt::DesktopWindowXamlSource,
 
-  // IDesktopWindowXamlSource COM derived from DesktopWindowXamlSource above
-  // and contains the 'attach' function for using it with existing HWND
-  pub idesktop_source: IDesktopWindowXamlSourceNative,
+    // IDesktopWindowXamlSource COM derived from DesktopWindowXamlSource above
+    // and contains the 'attach' function for using it with existing HWND
+    pub idesktop_source: IDesktopWindowXamlSourceNative,
 }
 
 impl Default for XamlIslandWindow {
-  fn default() -> XamlIslandWindow {
-    unsafe {
-      XamlIslandWindow {
-        hwnd_parent: std::ptr::null_mut(),
-        hwnd: std::ptr::null_mut(),
-        idesktop_source: std::mem::zeroed(),
-        desktop_source: std::mem::zeroed(),
-        win_xaml_mgr: std::mem::zeroed(),
-      }
+    fn default() -> XamlIslandWindow {
+        unsafe {
+            XamlIslandWindow {
+                hwnd_parent: std::ptr::null_mut(),
+                hwnd: std::ptr::null_mut(),
+                idesktop_source: std::mem::zeroed(),
+                desktop_source: std::mem::zeroed(),
+                win_xaml_mgr: std::mem::zeroed(),
+            }
+        }
     }
-  }
 }
 
 pub struct ListItem<'a> {
-  pub title: &'a str,
-  pub subtitle: &'a str,
+    pub title: &'a str,
+    pub subtitle: &'a str,
 }
 
 pub struct UI<'a> {
-  pub xaml_isle: &'a XamlIslandWindow,
-  pub event_loop: &'a winit::event_loop::EventLoopProxy<BSEvent>,
-  pub browser_list: &'a Vec<ListItem<'a>>,
-  pub url: &'a String,
+    pub xaml_isle: &'a XamlIslandWindow,
+    pub event_loop: &'a winit::event_loop::EventLoopProxy<BSEvent>,
+    pub browser_list: &'a Vec<ListItem<'a>>,
+    pub url: &'a String,
 }
 
-pub fn init_win_ui_xaml(xaml_isle: &mut XamlIslandWindow) -> winrt::Result<()> {
-  use winrt::Object;
-  xaml_isle.win_xaml_mgr = wrt::WindowsXamlManager::initialize_for_current_thread()?;
-  xaml_isle.desktop_source =
-    winrt::factory::<wrt::DesktopWindowXamlSource, wrt::IDesktopWindowXamlSourceFactory>()?
-      .create_instance(Object::default(), &mut Object::default())?;
-  xaml_isle.idesktop_source = xaml_isle.desktop_source.clone().into();
+pub fn init_win_ui_xaml() -> winrt::Result<XamlIslandWindow> {
+    use winrt::Object;
+    let mut xaml_isle = XamlIslandWindow::default();
+    xaml_isle.win_xaml_mgr = wrt::WindowsXamlManager::initialize_for_current_thread()?;
+    xaml_isle.desktop_source =
+        winrt::factory::<wrt::DesktopWindowXamlSource, wrt::IDesktopWindowXamlSourceFactory>()?
+            .create_instance(Object::default(), &mut Object::default())?;
+    xaml_isle.idesktop_source = xaml_isle.desktop_source.clone().into();
 
-  Ok(())
+    Ok(xaml_isle)
 }
 
 pub fn attach_window_to_xaml(
-  window: &winit::window::Window,
-  xaml_isle: &mut XamlIslandWindow,
+    window: &winit::window::Window,
+    xaml_isle: &mut XamlIslandWindow,
 ) -> winrt::Result<*mut std::ffi::c_void> {
-  xaml_isle.hwnd_parent = get_hwnd(window) as *mut std::ffi::c_void;
+    xaml_isle.hwnd_parent = get_hwnd(window) as *mut std::ffi::c_void;
 
-  xaml_isle
-    .idesktop_source
-    .attach_to_window(xaml_isle.hwnd_parent)?;
-  return xaml_isle.idesktop_source.get_window_handle();
+    xaml_isle
+        .idesktop_source
+        .attach_to_window(xaml_isle.hwnd_parent)?;
+    return xaml_isle.idesktop_source.get_window_handle();
 }
 
 pub fn update_xaml_island_size(
-  xaml_isle: &XamlIslandWindow,
-  size: winit::dpi::PhysicalSize<u32>,
+    xaml_isle: &XamlIslandWindow,
+    size: winit::dpi::PhysicalSize<u32>,
 ) -> winrt::Result<()> {
-  unsafe {
-    SetWindowPos(
-      xaml_isle.hwnd as HWND,
-      std::ptr::null_mut(),
-      0,
-      0,
-      size.width as i32,
-      size.height as i32,
-      0x40,
-    );
+    unsafe {
+        SetWindowPos(
+            xaml_isle.hwnd as HWND,
+            std::ptr::null_mut(),
+            0,
+            0,
+            size.width as i32,
+            size.height as i32,
+            0x40,
+        );
 
-    UpdateWindow(xaml_isle.hwnd as HWND);
-  }
+        UpdateWindow(xaml_isle.hwnd as HWND);
+    }
 
-  Ok(())
+    Ok(())
 }
 
 pub fn create_dummy_ui(
-  xaml_isle: &XamlIslandWindow,
-  ev_loop: winit::event_loop::EventLoopProxy<BSEvent>,
+    xaml_isle: &XamlIslandWindow,
+    ev_loop: winit::event_loop::EventLoopProxy<BSEvent>,
 ) -> winrt::Result<()> {
-  let container = winrt::factory::<wrt::RelativePanel, wrt::IRelativePanelFactory>()?
-    .create_instance(winrt::Object::default(), &mut winrt::Object::default())?;
-  // let button = Button::new()?;
-  let button = winrt::factory::<wrt::Button, wrt::IButtonFactory>()?
-    .create_instance(winrt::Object::default(), &mut winrt::Object::default())?;
-  let button_text_prop: winrt::Object = wrt::PropertyValue::create_string("Hello world my dear")?;
-  button.set_content(button_text_prop)?;
-  wrt::RelativePanel::set_align_bottom_with_panel(&button, true)?;
-  wrt::RelativePanel::set_align_right_with_panel(&button, true)?;
-  button.click(wrt::RoutedEventHandler::new(move |_, _| {
-    let _ = ev_loop.send_event(BSEvent::Close);
+    let container = winrt::factory::<wrt::RelativePanel, wrt::IRelativePanelFactory>()?
+        .create_instance(winrt::Object::default(), &mut winrt::Object::default())?;
+    // let button = Button::new()?;
+    let button = winrt::factory::<wrt::Button, wrt::IButtonFactory>()?
+        .create_instance(winrt::Object::default(), &mut winrt::Object::default())?;
+    let button_text_prop: winrt::Object = wrt::PropertyValue::create_string("Hello world my dear")?;
+    button.set_content(button_text_prop)?;
+    wrt::RelativePanel::set_align_bottom_with_panel(&button, true)?;
+    wrt::RelativePanel::set_align_right_with_panel(&button, true)?;
+    button.click(wrt::RoutedEventHandler::new(move |_, _| {
+        let _ = ev_loop.send_event(BSEvent::Close);
+        Ok(())
+    }))?;
+
+    container.children()?.append(&button);
+    container.update_layout()?;
+
+    xaml_isle.desktop_source.set_content(container)?;
     Ok(())
-  }))?;
-
-  container.children()?.append(&button);
-  container.update_layout()?;
-
-  xaml_isle.desktop_source.set_content(container)?;
-  Ok(())
 }
 
 pub fn create_ui(ui: &UI) -> winrt::Result<wrt::UIElement> {
-  let ui_container = winrt::factory::<wrt::StackPanel, wrt::IStackPanelFactory>()?
-    .create_instance(winrt::Object::default(), &mut winrt::Object::default())?;
-  ui_container.set_margin(wrt::Thickness {
-    top: 15.,
-    left: 15.,
-    right: 15.,
-    bottom: 15.,
-  })?;
+    let ui_container = winrt::factory::<wrt::StackPanel, wrt::IStackPanelFactory>()?
+        .create_instance(winrt::Object::default(), &mut winrt::Object::default())?;
+    ui_container.set_margin(wrt::Thickness {
+        top: 15.,
+        left: 15.,
+        right: 15.,
+        bottom: 15.,
+    })?;
 
-  let call_to_action_top_row = wrt::TextBlock::new()?;
-  let call_to_action_bottom_row = wrt::TextBlock::new()?;
-  call_to_action_top_row.set_text("You are about to open URL:");
-  call_to_action_bottom_row.set_text(ui.url as &str);
-  ui_container.children()?.append(call_to_action_top_row);
-  ui_container.children()?.append(call_to_action_bottom_row);
+    let call_to_action_top_row = wrt::TextBlock::new()?;
+    let call_to_action_bottom_row = wrt::TextBlock::new()?;
+    call_to_action_top_row.set_text("You are about to open URL:");
+    call_to_action_bottom_row.set_text(ui.url as &str);
+    ui_container.children()?.append(call_to_action_top_row);
+    ui_container.children()?.append(call_to_action_bottom_row);
 
-  let list = create_list(ui.xaml_isle, ui.event_loop, ui.browser_list)?;
-  ui_container.children()?.append(list);
+    let list = create_list(ui.xaml_isle, ui.event_loop, ui.browser_list)?;
+    ui_container.children()?.append(list);
 
-  Ok(ui_container.into())
+    Ok(ui_container.into())
 }
 
 pub fn create_list_item(title: &str, subtext: &str) -> winrt::Result<wrt::UIElement> {
-  let list_item_margins = wrt::Thickness {
-    top: 15.,
-    left: 15.,
-    right: 15.,
-    bottom: 15.,
-  };
-  let stack_panel = winrt::factory::<wrt::StackPanel, wrt::IStackPanelFactory>()?
-    .create_instance(winrt::Object::default(), &mut winrt::Object::default())?;
-  stack_panel.set_margin(&list_item_margins);
+    let list_item_margins = wrt::Thickness {
+        top: 15.,
+        left: 15.,
+        right: 15.,
+        bottom: 15.,
+    };
+    let stack_panel = winrt::factory::<wrt::StackPanel, wrt::IStackPanelFactory>()?
+        .create_instance(winrt::Object::default(), &mut winrt::Object::default())?;
+    stack_panel.set_margin(&list_item_margins);
 
-  let title_block = wrt::TextBlock::new()?;
-  title_block.set_text(title as &str);
+    let title_block = wrt::TextBlock::new()?;
+    title_block.set_text(title as &str);
 
-  let subtitle_block = wrt::TextBlock::new()?;
-  subtitle_block.set_text(subtext as &str)?;
+    let subtitle_block = wrt::TextBlock::new()?;
+    subtitle_block.set_text(subtext as &str)?;
 
-  stack_panel.children()?.append(title_block);
-  stack_panel.children()?.append(subtitle_block);
-  Ok(stack_panel.into())
+    stack_panel.children()?.append(title_block);
+    stack_panel.children()?.append(subtitle_block);
+    Ok(stack_panel.into())
 }
 
 pub fn create_list(
-  xaml: &XamlIslandWindow,
-  ev_loop: &EventLoopProxy<BSEvent>,
-  list: &Vec<ListItem>,
+    xaml: &XamlIslandWindow,
+    ev_loop: &EventLoopProxy<BSEvent>,
+    list: &Vec<ListItem>,
 ) -> winrt::Result<wrt::UIElement> {
-  struct ListPos {
-    x: f64,
-    y: f64,
-    width: f64,
-    height: f64,
-  };
-  let list_pos = ListPos {
-    x: 0.,
-    y: 0.,
-    width: 500.,
-    height: 200.,
-  };
+    struct ListPos {
+        x: f64,
+        y: f64,
+        width: f64,
+        height: f64,
+    };
+    let list_pos = ListPos {
+        x: 0.,
+        y: 0.,
+        width: 500.,
+        height: 200.,
+    };
 
-  let list_control = winrt::factory::<wrt::ListView, wrt::IListViewFactory>()?
-    .create_instance(winrt::Object::default(), &mut winrt::Object::default())?;
-  list_control.set_margin(wrt::Thickness {
-    top: 15.,
-    left: 0.,
-    right: 0.,
-    bottom: 0.,
-  })?;
-  list_control.set_selection_mode(wrt::ListViewSelectionMode::Single);
+    let list_control = winrt::factory::<wrt::ListView, wrt::IListViewFactory>()?
+        .create_instance(winrt::Object::default(), &mut winrt::Object::default())?;
+    list_control.set_margin(wrt::Thickness {
+        top: 15.,
+        left: 0.,
+        right: 0.,
+        bottom: 0.,
+    })?;
+    list_control.set_selection_mode(wrt::ListViewSelectionMode::Single);
 
-  for item in list {
-    let item = create_list_item(item.title, item.subtitle)?;
-    list_control.items()?.append(winrt::Object::from(item))?;
-  }
-  list_control.set_selected_index(0);
+    for item in list {
+        let item = create_list_item(item.title, item.subtitle)?;
+        list_control.items()?.append(winrt::Object::from(item))?;
+    }
+    list_control.set_selected_index(0);
 
-  Ok(list_control.into())
+    Ok(list_control.into())
+}
+
+pub fn create_dummy_image() -> winrt::Result<wrt::Image> {
+    let width: i32 = 32;
+    let height: i32 = 32;
+    let buffer_len = 1024;
+    let buffer = vec!([rgbaToBGRA(255, 0, 0, 255); 1024]);
+
+    let data_writer = winrt::factory::<wrt::DataWriter, wrt::IDataWriterFactory>()?
+        .create_instance(winrt::Object::default(),  &mut winrt::Object::default())?;
+
+    // todo:
+    // write with the data_writer (look for ABI specific array format)
+    // set source for the image
+
+    let winrt_bitmap = winrt::factory::<wrt::SoftwareBitmap, wrt::ISoftwareBitmapFactory>()?
+        .create_instance(wrt::BitmapPixelFormat::Bgra8,  32, 32)?;
+    let image_control = wrt::Image::new()?;
+
+    return Ok(image_control);
+}
+
+
+/// Makes a standard RGBA into a single i32 with premultiplied alpha
+/// as required by MS XAML
+pub fn rgbaToBGRA(r: u8, g: u8, b: u8, a: u8) -> i32 {
+    let res_r = r * a / 255;
+    let res_g = g * a / 255;
+    let res_b = b * a / 255;
+    let res_a = a;
+
+    // might not work with big endian
+    ((res_b << 24) | (res_g << 16) | (res_r << 8) | res_a) as i32
 }
 
 //
