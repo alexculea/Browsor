@@ -14,11 +14,13 @@ mod wrt {
     pub use bindings::windows::ui::xaml::controls::{
         Button, IButtonFactory, IListBoxFactory, IListViewFactory, IRelativePanelFactory,
         IStackPanelFactory, ListBox, ListView, ListViewSelectionMode, RelativePanel, StackPanel,
+        Orientation,
         TextBlock,
         Image
     };
     pub use bindings::windows::ui::xaml::{RoutedEventHandler, Thickness, UIElement};
-    pub use bindings::windows::ui::xaml::media::imaging::{SoftwareBitmapSource};
+    pub use bindings::windows::ui::xaml::media::imaging::{SoftwareBitmapSource, BitmapImage};
+    pub use bindings::windows::ui::xaml::media::{ImageSource};
     pub use bindings::windows::graphics::imaging::{
         SoftwareBitmap, ISoftwareBitmapFactory, BitmapPixelFormat,
     };
@@ -31,7 +33,7 @@ use winit::event_loop::EventLoopProxy;
 
 // use crate::initialize_with_window::*;
 use crate::desktop_window_xaml_source::IDesktopWindowXamlSourceNative;
-use crate::util::get_hwnd;
+use crate::util::{get_hwnd, as_u8_slice};
 
 #[derive(Debug)]
 pub enum BSEvent {
@@ -184,9 +186,10 @@ pub fn create_list_item(title: &str, subtext: &str) -> winrt::Result<wrt::UIElem
         right: 15.,
         bottom: 15.,
     };
-    let stack_panel = winrt::factory::<wrt::StackPanel, wrt::IStackPanelFactory>()?
-        .create_instance(winrt::Object::default(), &mut winrt::Object::default())?;
-    stack_panel.set_margin(&list_item_margins);
+    let root_stack_panel = create_stack_panel()?;
+    let image = create_dummy_image()?;
+    let name_version_stack_panel = create_stack_panel()?;
+    root_stack_panel.set_margin(&list_item_margins);
 
     let title_block = wrt::TextBlock::new()?;
     title_block.set_text(title as &str);
@@ -194,9 +197,18 @@ pub fn create_list_item(title: &str, subtext: &str) -> winrt::Result<wrt::UIElem
     let subtitle_block = wrt::TextBlock::new()?;
     subtitle_block.set_text(subtext as &str)?;
 
-    stack_panel.children()?.append(title_block);
-    stack_panel.children()?.append(subtitle_block);
-    Ok(stack_panel.into())
+    name_version_stack_panel.children()?.append(title_block)?;
+    name_version_stack_panel.children()?.append(subtitle_block)?;
+    root_stack_panel.children()?.append(image)?;
+    root_stack_panel.children()?.append(name_version_stack_panel)?;
+    Ok(root_stack_panel.into())
+}
+
+pub fn create_stack_panel() -> winrt::Result<wrt::StackPanel> {
+    let stack_panel = winrt::factory::<wrt::StackPanel, wrt::IStackPanelFactory>()?
+        .create_instance(winrt::Object::default(), &mut winrt::Object::default())?;
+
+    Ok(stack_panel)
 }
 
 pub fn create_list(
@@ -240,33 +252,37 @@ pub fn create_dummy_image() -> winrt::Result<wrt::Image> {
     let width: i32 = 32;
     let height: i32 = 32;
     let buffer_len = 1024;
-    let buffer = vec!([rgbaToBGRA(255, 0, 0, 255); 1024]);
+    let buffer = [rgba_to_bgra(255, 0, 0, 255); 1024];
 
-    let data_writer = winrt::factory::<wrt::DataWriter, wrt::IDataWriterFactory>()?
-        .create_instance(winrt::Object::default(),  &mut winrt::Object::default())?;
+    let data_writer = wrt::DataWriter::new()?;
+    data_writer.write_bytes(as_u8_slice(&buffer[..]));
+    let i_buffer = data_writer.detach_buffer()?;
 
-    // todo:
-    // write with the data_writer (look for ABI specific array format)
-    // set source for the image
-
-    let winrt_bitmap = winrt::factory::<wrt::SoftwareBitmap, wrt::ISoftwareBitmapFactory>()?
-        .create_instance(wrt::BitmapPixelFormat::Bgra8,  32, 32)?;
+    let winrt_bitmap = wrt::SoftwareBitmap::create(wrt::BitmapPixelFormat::Bgra8,  32, 32)?;
+    winrt_bitmap.copy_from_buffer(i_buffer)?;
     let image_control = wrt::Image::new()?;
+    let img_src: wrt::SoftwareBitmapSource = wrt::SoftwareBitmapSource::new()?;
+    img_src.set_bitmap_async(winrt_bitmap)?.get()?;
+
+    image_control.set_source(wrt::ImageSource::from(img_src))?;
 
     return Ok(image_control);
 }
 
 
-/// Makes a standard RGBA into a single i32 with premultiplied alpha
+/// Makes a standard RGBA into a single u32 with premultiplied alpha
 /// as required by MS XAML
-pub fn rgbaToBGRA(r: u8, g: u8, b: u8, a: u8) -> i32 {
-    let res_r = r * a / 255;
-    let res_g = g * a / 255;
-    let res_b = b * a / 255;
-    let res_a = a;
+pub fn rgba_to_bgra(r: u8, g: u8, b: u8, a: u8) -> u32 {
+    let res_r = ((r as u32) * (a as u32) / 255) as u32;
+    let res_g = (g * a / 255) as u32;
+    let res_b = (b * a / 255) as u32;
+
+    let b_val = res_b << 24;
+    let g_val = res_g << 16;
+    let r_val = res_r << 8;
 
     // might not work with big endian
-    ((res_b << 24) | (res_g << 16) | (res_r << 8) | res_a) as i32
+    b_val | g_val | r_val | a as u32
 }
 
 //

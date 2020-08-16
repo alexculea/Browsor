@@ -42,3 +42,8 @@ pub fn str_to_wide(string: &str) -> Vec<u16> {
 pub fn wide_to_str(buf: &Vec<u16>) -> String {
   String::from_utf16_lossy(&buf)
 }
+
+pub fn as_u8_slice(v: &[u32]) -> &[u8] {
+  let element_size = std::mem::size_of::<u32>();
+  unsafe { std::slice::from_raw_parts(v.as_ptr() as *const u8, v.len() * element_size) }
+}
