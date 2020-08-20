@@ -19,6 +19,7 @@ winrt::build!(
         IListViewFactory, ListView, ListViewSelectionMode,
         IStackPanelFactory,
         StackPanel,
+        Orientation,
         Image
       }
       windows::ui::xaml::media::imaging::{
@@ -30,7 +31,7 @@ winrt::build!(
         WindowsXamlManager
       }
       windows::graphics::imaging::{
-        SoftwareBitmap, ISoftwareBitmapFactory, BitmapPixelFormat
+        SoftwareBitmap, ISoftwareBitmapFactory, BitmapPixelFormat, BitmapAlphaMode
       }
 );
 

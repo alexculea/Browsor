@@ -22,7 +22,7 @@ mod wrt {
     pub use bindings::windows::ui::xaml::media::imaging::{SoftwareBitmapSource, BitmapImage};
     pub use bindings::windows::ui::xaml::media::{ImageSource};
     pub use bindings::windows::graphics::imaging::{
-        SoftwareBitmap, ISoftwareBitmapFactory, BitmapPixelFormat,
+        SoftwareBitmap, ISoftwareBitmapFactory, BitmapPixelFormat, BitmapAlphaMode,
     };
 }
 
@@ -181,18 +181,20 @@ pub fn create_ui(ui: &UI) -> winrt::Result<wrt::UIElement> {
 
 pub fn create_list_item(title: &str, subtext: &str) -> winrt::Result<wrt::UIElement> {
     let list_item_margins = wrt::Thickness {
-        top: 15.,
+        top: 0.,
         left: 15.,
-        right: 15.,
-        bottom: 15.,
+        right: 0.,
+        bottom: 0.,
     };
     let root_stack_panel = create_stack_panel()?;
+    root_stack_panel.set_orientation(wrt::Orientation::Horizontal)?;
+
     let image = create_dummy_image()?;
     let name_version_stack_panel = create_stack_panel()?;
-    root_stack_panel.set_margin(&list_item_margins);
+    name_version_stack_panel.set_margin(&list_item_margins)?;
 
     let title_block = wrt::TextBlock::new()?;
-    title_block.set_text(title as &str);
+    title_block.set_text(title as &str)?;
 
     let subtitle_block = wrt::TextBlock::new()?;
     subtitle_block.set_text(subtext as &str)?;
@@ -237,32 +239,40 @@ pub fn create_list(
         right: 0.,
         bottom: 0.,
     })?;
-    list_control.set_selection_mode(wrt::ListViewSelectionMode::Single);
+    list_control.set_selection_mode(wrt::ListViewSelectionMode::Single)?;
 
     for item in list {
         let item = create_list_item(item.title, item.subtitle)?;
         list_control.items()?.append(winrt::Object::from(item))?;
     }
-    list_control.set_selected_index(0);
+    list_control.set_selected_index(0)?;
 
     Ok(list_control.into())
 }
 
 pub fn create_dummy_image() -> winrt::Result<wrt::Image> {
-    let width: i32 = 32;
-    let height: i32 = 32;
-    let buffer_len = 1024;
-    let buffer = [rgba_to_bgra(255, 0, 0, 255); 1024];
-
+    let buffer = [0xFF0000AA; 1024];
     let data_writer = wrt::DataWriter::new()?;
-    data_writer.write_bytes(as_u8_slice(&buffer[..]));
+    data_writer.write_bytes(as_u8_slice(&buffer[..]))?;
+    
     let i_buffer = data_writer.detach_buffer()?;
+    let winrt_bitmap = wrt::SoftwareBitmap::create_copy_with_alpha_from_buffer(
+        i_buffer,
+        wrt::BitmapPixelFormat::Rgba8,  
+        32, 
+        32,
+        wrt::BitmapAlphaMode::Straight
+    )?;
 
-    let winrt_bitmap = wrt::SoftwareBitmap::create(wrt::BitmapPixelFormat::Bgra8,  32, 32)?;
-    winrt_bitmap.copy_from_buffer(i_buffer)?;
+    // ToDO: Can we achieve the same thing without this conversion?
+    // Background: ImageSource.SetBitmapAsync will throw an exception if 
+    // the bitmap set is not Pixel Format: BGRA8, BitmapAlphaMode: Premulitplied
+    // Does it work setting these flags without any pixel conversion?
+    let winui_friendly_bmp = wrt::SoftwareBitmap::convert_with_alpha(winrt_bitmap, wrt::BitmapPixelFormat::Bgra8, wrt::BitmapAlphaMode::Premultiplied)?;
+
     let image_control = wrt::Image::new()?;
     let img_src: wrt::SoftwareBitmapSource = wrt::SoftwareBitmapSource::new()?;
-    img_src.set_bitmap_async(winrt_bitmap)?.get()?;
+    img_src.set_bitmap_async(winui_friendly_bmp)?;
 
     image_control.set_source(wrt::ImageSource::from(img_src))?;
 
