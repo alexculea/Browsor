@@ -1,9 +1,6 @@
 #[macro_use]
 extern crate simple_error;
 
-#[macro_use]
-extern crate winapi;
-
 mod desktop_window_xaml_source;
 mod os_browsers;
 mod ui;
@@ -47,10 +44,17 @@ fn main() {
 
     let list_items: Vec<ui::ListItem> = browsers
         .iter()
-        .map(move |browser_entry| ui::ListItem {
-            title: &browser_entry.name,
-            subtitle: "Version placeholder",
-        })
+        .map(|browser_entry|
+            ui::ListItem {
+                title: browser_entry.version.product_name.clone(),
+                subtitle: vec![
+                    browser_entry.version.product_version.clone(),
+                    browser_entry.version.binary_type.to_string(),
+                    browser_entry.version.company_name.clone(),
+                    browser_entry.version.file_description.clone(),
+                ].into_iter().filter(|itm| itm.len() > 0).collect::<Vec<String>>().join(" | ")
+            }
+        )
         .rev()
         .collect();
 

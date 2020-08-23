@@ -74,15 +74,15 @@ impl Default for XamlIslandWindow {
     }
 }
 
-pub struct ListItem<'a> {
-    pub title: &'a str,
-    pub subtitle: &'a str,
+pub struct ListItem {
+    pub title: String,
+    pub subtitle: String,
 }
 
 pub struct UI<'a> {
     pub xaml_isle: &'a XamlIslandWindow,
     pub event_loop: &'a winit::event_loop::EventLoopProxy<BSEvent>,
-    pub browser_list: &'a Vec<ListItem<'a>>,
+    pub browser_list: &'a Vec<ListItem>,
     pub url: &'a String,
 }
 
@@ -149,7 +149,7 @@ pub fn create_dummy_ui(
         Ok(())
     }))?;
 
-    container.children()?.append(&button);
+    container.children()?.append(&button)?;
     container.update_layout()?;
 
     xaml_isle.desktop_source.set_content(container)?;
@@ -168,13 +168,13 @@ pub fn create_ui(ui: &UI) -> winrt::Result<wrt::UIElement> {
 
     let call_to_action_top_row = wrt::TextBlock::new()?;
     let call_to_action_bottom_row = wrt::TextBlock::new()?;
-    call_to_action_top_row.set_text("You are about to open URL:");
-    call_to_action_bottom_row.set_text(ui.url as &str);
-    ui_container.children()?.append(call_to_action_top_row);
-    ui_container.children()?.append(call_to_action_bottom_row);
+    call_to_action_top_row.set_text("You are about to open URL:")?;
+    call_to_action_bottom_row.set_text(ui.url as &str)?;
+    ui_container.children()?.append(call_to_action_top_row)?;
+    ui_container.children()?.append(call_to_action_bottom_row)?;
 
     let list = create_list(ui.xaml_isle, ui.event_loop, ui.browser_list)?;
-    ui_container.children()?.append(list);
+    ui_container.children()?.append(list)?;
 
     Ok(ui_container.into())
 }
@@ -241,8 +241,10 @@ pub fn create_list(
     })?;
     list_control.set_selection_mode(wrt::ListViewSelectionMode::Single)?;
 
+    let mut sorted_items = *list.to_owned();
+    sorted_items.sort_unstable_by_key(|item| item.title.clone());
     for item in list {
-        let item = create_list_item(item.title, item.subtitle)?;
+        let item = create_list_item(item.title.as_str(), item.subtitle.as_str())?;
         list_control.items()?.append(winrt::Object::from(item))?;
     }
     list_control.set_selected_index(0)?;
