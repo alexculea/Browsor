@@ -343,7 +343,7 @@ fn read_exe_version_info(path: &str) -> Result<VersionInfo> {
     }
 }
 
-fn get_exe_file_icon(path: &str) -> Result<winapi::HICON> {
+pub fn get_exe_file_icon(path: &str) -> Result<winapi::HICON> {
     let wide_path = crate::util::str_to_wide(&path);
     let mut file_info: winapi::SHFILEINFOW =
         unsafe { std::mem::MaybeUninit::zeroed().assume_init() };

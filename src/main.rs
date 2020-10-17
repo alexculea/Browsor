@@ -5,6 +5,7 @@ mod desktop_window_xaml_source;
 mod os_browsers;
 mod ui;
 mod util;
+mod error;
 
 use winit::{
     event::{Event, WindowEvent},
@@ -44,17 +45,7 @@ fn main() {
 
     let list_items: Vec<ui::ListItem> = browsers
         .iter()
-        .map(|browser_entry|
-            ui::ListItem {
-                title: browser_entry.version.product_name.clone(),
-                subtitle: vec![
-                    browser_entry.version.product_version.clone(),
-                    browser_entry.version.binary_type.to_string(),
-                    browser_entry.version.company_name.clone(),
-                    browser_entry.version.file_description.clone(),
-                ].into_iter().filter(|itm| itm.len() > 0).collect::<Vec<String>>().join(" | ")
-            }
-        )
+        .map(ui_list_item_from_browser)
         .rev()
         .collect();
 
@@ -100,4 +91,26 @@ fn main() {
     });
 
     Ok(())
+}
+
+fn ui_list_item_from_browser(browser: &os_browsers::Browser) -> ui::ListItem {
+    use winapi::shared::windef::HICON;
+
+    let app_hicon: HICON
+        = os_browsers::get_exe_file_icon(browser.exe_path.as_str()).unwrap_or(0 as HICON);
+    let software_bmp = ui::hicon_to_software_bitmap(app_hicon).unwrap();
+    let xaml_image = ui::software_bitmap_to_xaml_image(software_bmp).unwrap();
+
+    ui::ListItem {
+        title: browser.version.product_name.clone(),
+        subtitle: vec![
+                browser.version.product_version.clone(),
+                browser.version.binary_type.to_string(),
+                browser.version.company_name.clone(),
+                browser.version.file_description.clone(),
+            ].into_iter()
+            .filter(|itm| itm.len() > 0).collect::<Vec<String>>()
+            .join(" | "),
+        image: xaml_image
+    }
 }

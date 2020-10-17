@@ -14,7 +14,7 @@ winrt::build!(
       windows::ui::xaml::controls::{
         Button, IButtonFactory, 
         IRelativePanelFactory, RelativePanel, 
-        ListBox, IListBoxFactory, 
+        ListBox, IListBoxFactory, ScrollViewer, ScrollMode,
         TextBlock, 
         IListViewFactory, ListView, ListViewSelectionMode,
         IStackPanelFactory,
