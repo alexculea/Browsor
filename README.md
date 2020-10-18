@@ -54,10 +54,12 @@ winrt::Windows::UI::Xaml::UIElement LoadXamlControl(uint32_t id)
 ```
 taken from <https://github.com/microsoft/Xaml-Islands-Samples/tree/master/Samples/Win32/SampleCppApp>
 
+Loading resources at run time:
+[https://stackoverflow.com/questions/2933295/embed-text-file-in-a-resource-in-a-native-windows-application]
 
 #### Loading an WinRT Image from a incon 
 
-<https://stackoverflow.com/questions/32122679/getting-icon-of-modern-windows-app-from-a-desktop-application>
+[https://stackoverflow.com/questions/32122679/getting-icon-of-modern-windows-app-from-a-desktop-application]
 
 
 ### Get Icon from file?

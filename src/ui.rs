@@ -20,9 +20,20 @@ mod wrt {
         ScrollViewer, ScrollMode, IScrollViewerStatics,
         Orientation,
         TextBlock,
-        Image
+        Image,
+        Grid,
+        RowDefinition,
+        ColumnDefinition,
+        IGridFactory,
+        IGridStatics
     };
-    pub use bindings::windows::ui::xaml::{RoutedEventHandler, Thickness, UIElement};
+    pub use bindings::windows::ui::xaml::{
+        RoutedEventHandler,
+        Thickness,
+        UIElement,        
+        GridUnitType,
+        GridLength,
+    };
     pub use bindings::windows::ui::xaml::media::imaging::{SoftwareBitmapSource, BitmapImage};
     pub use bindings::windows::ui::xaml::media::{ImageSource};
     pub use bindings::windows::graphics::imaging::{
@@ -150,8 +161,6 @@ pub fn update_xaml_island_size(
             size.height as i32,
             0x40,
         );
-
-        winapi::UpdateWindow(xaml_isle.hwnd as winapi::HWND);
     }
 
     Ok(())
@@ -182,27 +191,62 @@ pub fn create_dummy_ui(
     Ok(())
 }
 
+
 pub fn create_ui(ui: &UI) -> winrt::Result<wrt::UIElement> {
-    let ui_container = winrt::factory::<wrt::StackPanel, wrt::IStackPanelFactory>()?
-        .create_instance(winrt::Object::default(), &mut winrt::Object::default())?;
-    ui_container.set_margin(wrt::Thickness {
+    let stack_panel = winrt::factory::<wrt::StackPanel, wrt::IStackPanelFactory>()?
+        .create_instance(
+            winrt::Object::default(),
+            &mut winrt::Object::default()
+        )?;
+    let grid = winrt::factory::<wrt::Grid, wrt::IGridFactory>()?
+        .create_instance(
+            winrt::Object::default(),
+            &mut winrt::Object::default(),
+        )?; 
+    let list = create_list(ui.xaml_isle, ui.event_loop, ui.browser_list)?;
+    let starSize = wrt::GridLength {
+        value: 0.0,
+        grid_unit_type: wrt::GridUnitType::Star,
+    };
+    let autoSize = wrt::GridLength {
+        value: 0.0,
+        grid_unit_type: wrt::GridUnitType::Auto,
+    };
+    let column_definition = wrt::ColumnDefinition::new()?;
+    let top_row_definition = wrt::RowDefinition::new()?;
+    let bottom_row_definition = wrt::RowDefinition::new()?;
+    let call_to_action_top_row = wrt::TextBlock::new()?;
+    let call_to_action_bottom_row = wrt::TextBlock::new()?;
+
+    column_definition.set_width(starSize)?;
+    top_row_definition.set_height(autoSize)?;
+    bottom_row_definition.set_height(autoSize)?;
+
+    grid.row_definitions()?.append(top_row_definition)?;
+    grid.row_definitions()?.append(top_row_definition)?;
+    grid.column_definitions()?.append(column_definition)?;
+    grid.set_margin(wrt::Thickness {
         top: 15.,
         left: 15.,
         right: 15.,
         bottom: 15.,
     })?;
+    grid.children()?.append(stack_panel)?;
+    grid.children()?.append(list)?;
 
-    let call_to_action_top_row = wrt::TextBlock::new()?;
-    let call_to_action_bottom_row = wrt::TextBlock::new()?;
+    let grid_statics = winrt::factory::<wrt::ScrollViewer, wrt::IGridStatics>()?;
+    grid_statics.set_column(stack_panel, 0)?;
+    grid_statics.set_row(stack_panel, 0)?;
+    grid_statics.set_column(winrt::Object::from(list).into(), 0)?;
+    grid_statics.set_row(winrt::Object::from(list).into(), 1)?;
+
     call_to_action_top_row.set_text("You are about to open URL:")?;
     call_to_action_bottom_row.set_text(ui.url as &str)?;
-    ui_container.children()?.append(call_to_action_top_row)?;
-    ui_container.children()?.append(call_to_action_bottom_row)?;
 
-    let list = create_list(ui.xaml_isle, ui.event_loop, ui.browser_list)?;
-    ui_container.children()?.append(list)?;
+    stack_panel.children()?.append(call_to_action_top_row)?;
+    stack_panel.children()?.append(call_to_action_bottom_row)?;
 
-    Ok(ui_container.into())
+    Ok(grid.into())
 }
 
 pub fn create_list_item(title: &str, subtext: &str, image: wrt::Image) -> winrt::Result<wrt::UIElement> {

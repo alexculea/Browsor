@@ -20,8 +20,16 @@ winrt::build!(
         IStackPanelFactory,
         StackPanel,
         Orientation,
-        Image
+        Image,
+        Grid,
+        ColumnDefinitions,
+        RowDefinition,
+        IGridFactory,
+        GridUnitType,
+        GridLength,
+        IGridStatics
       }
+      windows::ui::xaml::markup::*
       windows::ui::xaml::media::imaging::{
         SoftwareBitmapSource
       }

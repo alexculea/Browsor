@@ -1,0 +1,36 @@
+
+  <Grid
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+      mc:Ignorable="d"
+      Margin="15"
+  >
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="*" />
+    </Grid.ColumnDefinitions>
+    <Grid.RowDefinitions>
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="*" />
+    </Grid.RowDefinitions>
+
+    <StackPanel Grid.Column="0" Grid.Row="0"> 
+      <TextBlock Text="You are about to open URL:"  />
+      <TextBlock x:Name="URLIntentTextLabel" Text="https://www.google.com/ " />
+    </StackPanel>
+    <!-- <ScrollViewer Height="Auto" Margin="0,0,0,0" VerticalScrollBarVisibility="Disabled" HorizontalScrollBarVisibility="Auto"> -->
+      <ListView x:Name="BrowserList" Margin="0,15,0,0" VerticalAlignment="Stretch" Grid.Column="0" Grid.Row="1">
+        <ListViewItem>Hello</ListViewItem>
+        <ListViewItem>World</ListViewItem>
+        <ListViewItem>From</ListViewItem>
+        <ListViewItem>My</ListViewItem>
+        <ListViewItem>Humbe</ListViewItem>
+        <ListViewItem>Rust</ListViewItem>
+        <ListViewItem>Program</ListViewItem>
+      </ListView>
+    <!-- </ScrollViewer> -->
+  </Grid>
+  
+
+

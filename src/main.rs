@@ -7,11 +7,17 @@ mod ui;
 mod util;
 mod error;
 
+use std::fs;
 use winit::{
     event::{Event, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     window::WindowBuilder,
 };
+
+use winrt::ComInterface;
+
+use bindings::windows::ui::xaml::markup::XamlReader;
+use bindings::windows::ui::xaml::UIElement;
 
 fn main() {
     unsafe {
@@ -49,13 +55,15 @@ fn main() {
         .rev()
         .collect();
 
-    let ui_container = ui::create_ui(&ui::UI {
-        browser_list: &list_items,
-        event_loop: &event_loop_proxy,
-        xaml_isle: &xaml_isle,
-        url: &url,
-    })
-    .expect("Unable to create UI.");
+    // let ui_container = ui::create_ui(&ui::UI {
+    //     browser_list: &list_items,
+    //     event_loop: &event_loop_proxy,
+    //     xaml_isle: &xaml_isle,
+    //     url: &url,
+    // })
+    //     .expect("Unable to create UI.");
+    let xaml = fs::read_to_string("src\\main.xaml").expect("Cant read XAML file");
+    let ui_container = XamlReader::load(xaml).expect("Failed loading XAML").query::<UIElement>();
     xaml_isle.desktop_source.set_content(ui_container).unwrap();
 
     event_loop.run(move |event, _, control_flow| {
@@ -65,7 +73,6 @@ fn main() {
                 event: WindowEvent::CloseRequested,
                 window_id,
             } if window_id == window.id() => {
-                util::hide_window(&window);
                 *control_flow = ControlFlow::Exit
             }
             Event::WindowEvent {
@@ -73,6 +80,9 @@ fn main() {
                 ..
             } => {
                 ui::update_xaml_island_size(&xaml_isle, _size);
+                // this causes a memory violation
+                // when the program is closed but does work correclty
+                // while the program is running
             }
             Event::WindowEvent {
                 event: WindowEvent::KeyboardInput { input, .. },
