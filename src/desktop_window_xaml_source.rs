@@ -19,9 +19,7 @@ impl IDesktopWindowXamlSourceNative {
             .get_abi()
             .expect("IDesktopWindowXamlSourceNative not correctly initialized. Found null pointer.");
 
-        unsafe {
-            return (this.vtable().attach_to_window)(this, hwnd).ok();
-        }
+        return (this.vtable().attach_to_window)(this, hwnd).ok();
     }
 
     pub fn get_window_handle(&self) -> winrt::Result<*mut c_void> {
