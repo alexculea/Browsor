@@ -57,7 +57,6 @@ fn main() {
 
     let ui_container = ui::create_ui(&ui::UI {
         browser_list: &list_items,
-        event_loop: &event_loop_proxy,
         xaml_isle: &xaml_isle,
         url: &url,
     })

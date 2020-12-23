@@ -123,7 +123,6 @@ pub struct ListItem {
 
 pub struct UI<'a> {
     pub xaml_isle: &'a XamlIslandWindow,
-    pub event_loop: &'a winit::event_loop::EventLoopProxy<BSEvent>,
     pub browser_list: &'a Vec<ListItem>,
     pub url: &'a str,
 }
@@ -172,27 +171,16 @@ pub fn update_xaml_island_size(
 }
 
 pub fn create_ui(ui: &UI) -> winrt::Result<wrt::UIElement> {
-    let stack_panel = winrt::factory::<wrt::StackPanel, wrt::IStackPanelFactory>()?
-    .create_instance(
-        winrt::Object::default(),
-        &mut winrt::Object::default()
-    )?;
-    let call_to_action_top_row = wrt::TextBlock::new()?;
-    let call_to_action_bottom_row = wrt::TextBlock::new()?;
-    call_to_action_top_row.set_text("You are about to open URL:")?;
-    call_to_action_bottom_row.set_text(ui.url as &str)?;
-    stack_panel.children()?.append(call_to_action_top_row)?;
-    stack_panel.children()?.append(call_to_action_bottom_row)?;
-
-    let list = create_list(ui.xaml_isle, ui.event_loop, ui.browser_list)?;
+    let header_panel = create_header("You are about to open:", ui.url)?;
+    let list = create_list(ui.browser_list)?;
     let grid = create_main_layout_grid()?;
     
-    wrt::Grid::set_row(ComInterface::query::<wrt::FrameworkElement>(&stack_panel), 0)?;
+    wrt::Grid::set_row(ComInterface::query::<wrt::FrameworkElement>(&header_panel), 0)?;
     wrt::Grid::set_row(ComInterface::query::<wrt::FrameworkElement>(&list), 1)?;
-    wrt::Grid::set_column(ComInterface::query::<wrt::FrameworkElement>(&stack_panel), 0)?;
+    wrt::Grid::set_column(ComInterface::query::<wrt::FrameworkElement>(&header_panel), 0)?;
     wrt::Grid::set_column(ComInterface::query::<wrt::FrameworkElement>(&list), 0)?;
 
-    grid.children()?.append(stack_panel)?;
+    grid.children()?.append(header_panel)?;
     grid.children()?.append(list)?;
 
     Ok(grid.into())
@@ -261,11 +249,7 @@ pub fn create_stack_panel() -> winrt::Result<wrt::StackPanel> {
     Ok(stack_panel)
 }
 
-pub fn create_list(
-    xaml: &XamlIslandWindow,
-    ev_loop: &EventLoopProxy<BSEvent>,
-    list: &[ListItem],
-) -> winrt::Result<wrt::UIElement> {
+pub fn create_list(list: &[ListItem]) -> winrt::Result<wrt::UIElement> {
     let list_control = winrt::factory::<wrt::ListView, wrt::IListViewFactory>()?
         .create_instance(winrt::Object::default(), &mut winrt::Object::default())?;
     list_control.set_margin(wrt::Thickness {
@@ -290,6 +274,22 @@ pub fn create_list(
     list_control.set_selected_index(0)?;
 
     Ok(list_control.into())
+}
+
+pub fn create_header(open_action_text: &str, url: &str) -> winrt::Result<wrt::StackPanel> {
+    let stack_panel = winrt::factory::<wrt::StackPanel, wrt::IStackPanelFactory>()?
+    .create_instance(
+        winrt::Object::default(),
+        &mut winrt::Object::default()
+    )?;
+    let call_to_action_top_row = wrt::TextBlock::new()?;
+    let call_to_action_bottom_row = wrt::TextBlock::new()?;
+    call_to_action_top_row.set_text(open_action_text)?;
+    call_to_action_bottom_row.set_text(url)?;
+    stack_panel.children()?.append(call_to_action_top_row)?;
+    stack_panel.children()?.append(call_to_action_bottom_row)?;
+
+    Ok(stack_panel)
 }
 
 /// From the given WinRT SoftwareBitmap it returns
