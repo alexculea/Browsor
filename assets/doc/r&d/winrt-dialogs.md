@@ -1,5 +1,7 @@
 # Code snippet for WinRT dialog windows
 
+Snippet is below but best to checkout the discussion in SO here https://stackoverflow.com/questions/62107050/how-can-i-create-a-messagedialog-using-winrt-rs
+
 ```Rust
 trait InitializeWithWindow {
   fn initialize_with_window<O: RuntimeType + ComInterface>(
