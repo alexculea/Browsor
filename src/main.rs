@@ -55,15 +55,18 @@ fn main() {
         .rev()
         .collect();
 
-    // let ui_container = ui::create_ui(&ui::UI {
-    //     browser_list: &list_items,
-    //     event_loop: &event_loop_proxy,
-    //     xaml_isle: &xaml_isle,
-    //     url: &url,
-    // })
-    //     .expect("Unable to create UI.");
-    let xaml = fs::read_to_string("src\\main.xaml").expect("Cant read XAML file");
-    let ui_container = XamlReader::load(xaml).expect("Failed loading XAML").query::<UIElement>();
+    let ui_container = ui::create_ui(&ui::UI {
+        browser_list: &list_items,
+        event_loop: &event_loop_proxy,
+        xaml_isle: &xaml_isle,
+        url: &url,
+    })
+        .expect("Unable to create UI.");
+
+    // to load the UI from a xaml file instead:
+    // let xaml = fs::read_to_string("src\\main.xaml").expect("Cant read XAML file");
+    // let ui_container = XamlReader::load(xaml).expect("Failed loading XAML").query::<UIElement>();
+
     xaml_isle.desktop_source.set_content(ui_container).unwrap();
 
     event_loop.run(move |event, _, control_flow| {

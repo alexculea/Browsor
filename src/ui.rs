@@ -33,7 +33,10 @@ mod wrt {
         UIElement,        
         GridUnitType,
         GridLength,
+        FrameworkElement,
+        VerticalAlignment
     };
+    pub use bindings::windows::ui::xaml::interop::{TypeKind, TypeName};
     pub use bindings::windows::ui::xaml::media::imaging::{SoftwareBitmapSource, BitmapImage};
     pub use bindings::windows::ui::xaml::media::{ImageSource};
     pub use bindings::windows::graphics::imaging::{
@@ -69,6 +72,8 @@ use winit::event_loop::EventLoopProxy;
 use crate::desktop_window_xaml_source::IDesktopWindowXamlSourceNative;
 use crate::util::{get_hwnd, as_u8_slice};
 use crate::error::{BSResult, BSError};
+
+use winrt::ComInterface;
 
 #[derive(Debug)]
 pub enum BSEvent {
@@ -120,7 +125,7 @@ pub struct UI<'a> {
     pub xaml_isle: &'a XamlIslandWindow,
     pub event_loop: &'a winit::event_loop::EventLoopProxy<BSEvent>,
     pub browser_list: &'a Vec<ListItem>,
-    pub url: &'a String,
+    pub url: &'a str,
 }
 
 pub fn init_win_ui_xaml() -> winrt::Result<XamlIslandWindow> {
@@ -166,64 +171,52 @@ pub fn update_xaml_island_size(
     Ok(())
 }
 
-pub fn create_dummy_ui(
-    xaml_isle: &XamlIslandWindow,
-    ev_loop: winit::event_loop::EventLoopProxy<BSEvent>,
-) -> winrt::Result<()> {
-    let container = winrt::factory::<wrt::RelativePanel, wrt::IRelativePanelFactory>()?
-        .create_instance(winrt::Object::default(), &mut winrt::Object::default())?;
-    // let button = Button::new()?;
-    let button = winrt::factory::<wrt::Button, wrt::IButtonFactory>()?
-        .create_instance(winrt::Object::default(), &mut winrt::Object::default())?;
-    let button_text_prop: winrt::Object = wrt::PropertyValue::create_string("Hello world my dear")?;
-    button.set_content(button_text_prop)?;
-    wrt::RelativePanel::set_align_bottom_with_panel(&button, true)?;
-    wrt::RelativePanel::set_align_right_with_panel(&button, true)?;
-    button.click(wrt::RoutedEventHandler::new(move |_, _| {
-        let _ = ev_loop.send_event(BSEvent::Close);
-        Ok(())
-    }))?;
-
-    container.children()?.append(&button)?;
-    container.update_layout()?;
-
-    xaml_isle.desktop_source.set_content(container)?;
-    Ok(())
-}
-
-
 pub fn create_ui(ui: &UI) -> winrt::Result<wrt::UIElement> {
     let stack_panel = winrt::factory::<wrt::StackPanel, wrt::IStackPanelFactory>()?
-        .create_instance(
-            winrt::Object::default(),
-            &mut winrt::Object::default()
-        )?;
-    let grid = winrt::factory::<wrt::Grid, wrt::IGridFactory>()?
-        .create_instance(
-            winrt::Object::default(),
-            &mut winrt::Object::default(),
-        )?; 
+    .create_instance(
+        winrt::Object::default(),
+        &mut winrt::Object::default()
+    )?;
+    let call_to_action_top_row = wrt::TextBlock::new()?;
+    let call_to_action_bottom_row = wrt::TextBlock::new()?;
+    call_to_action_top_row.set_text("You are about to open URL:")?;
+    call_to_action_bottom_row.set_text(ui.url as &str)?;
+    stack_panel.children()?.append(call_to_action_top_row)?;
+    stack_panel.children()?.append(call_to_action_bottom_row)?;
+
     let list = create_list(ui.xaml_isle, ui.event_loop, ui.browser_list)?;
-    let starSize = wrt::GridLength {
-        value: 0.0,
-        grid_unit_type: wrt::GridUnitType::Star,
-    };
-    let autoSize = wrt::GridLength {
-        value: 0.0,
-        grid_unit_type: wrt::GridUnitType::Auto,
-    };
+    let grid = create_main_layout_grid()?;
+    
+    wrt::Grid::set_row(ComInterface::query::<wrt::FrameworkElement>(&stack_panel), 0)?;
+    wrt::Grid::set_row(ComInterface::query::<wrt::FrameworkElement>(&list), 1)?;
+    wrt::Grid::set_column(ComInterface::query::<wrt::FrameworkElement>(&stack_panel), 0)?;
+    wrt::Grid::set_column(ComInterface::query::<wrt::FrameworkElement>(&list), 0)?;
+
+    grid.children()?.append(stack_panel)?;
+    grid.children()?.append(list)?;
+
+    Ok(grid.into())
+}
+
+/// Creates a WinUI Grid control with a single column and two rows
+/// fit to be used for presentation in the main window where the top
+/// row has the action intro text (ie. "You are about to open x URL")
+/// and the bottom row has the list of browsers available.
+pub fn create_main_layout_grid() -> winrt::Result<wrt::Grid> {
+    let grid = winrt::factory::<wrt::Grid, wrt::IGridFactory>()?
+    .create_instance(
+        winrt::Object::default(),
+        &mut winrt::Object::default(),
+    )?;
     let column_definition = wrt::ColumnDefinition::new()?;
     let top_row_definition = wrt::RowDefinition::new()?;
     let bottom_row_definition = wrt::RowDefinition::new()?;
-    let call_to_action_top_row = wrt::TextBlock::new()?;
-    let call_to_action_bottom_row = wrt::TextBlock::new()?;
-
-    column_definition.set_width(starSize)?;
-    top_row_definition.set_height(autoSize)?;
-    bottom_row_definition.set_height(autoSize)?;
-
+    top_row_definition.set_height(wrt::GridLength {
+        value: 1.0,
+        grid_unit_type: wrt::GridUnitType::Auto,
+    })?;
     grid.row_definitions()?.append(top_row_definition)?;
-    grid.row_definitions()?.append(top_row_definition)?;
+    grid.row_definitions()?.append(bottom_row_definition)?;
     grid.column_definitions()?.append(column_definition)?;
     grid.set_margin(wrt::Thickness {
         top: 15.,
@@ -231,22 +224,8 @@ pub fn create_ui(ui: &UI) -> winrt::Result<wrt::UIElement> {
         right: 15.,
         bottom: 15.,
     })?;
-    grid.children()?.append(stack_panel)?;
-    grid.children()?.append(list)?;
 
-    let grid_statics = winrt::factory::<wrt::ScrollViewer, wrt::IGridStatics>()?;
-    grid_statics.set_column(stack_panel, 0)?;
-    grid_statics.set_row(stack_panel, 0)?;
-    grid_statics.set_column(winrt::Object::from(list).into(), 0)?;
-    grid_statics.set_row(winrt::Object::from(list).into(), 1)?;
-
-    call_to_action_top_row.set_text("You are about to open URL:")?;
-    call_to_action_bottom_row.set_text(ui.url as &str)?;
-
-    stack_panel.children()?.append(call_to_action_top_row)?;
-    stack_panel.children()?.append(call_to_action_bottom_row)?;
-
-    Ok(grid.into())
+    Ok(grid)
 }
 
 pub fn create_list_item(title: &str, subtext: &str, image: wrt::Image) -> winrt::Result<wrt::UIElement> {
@@ -296,12 +275,7 @@ pub fn create_list(
         bottom: 0.,
     })?;
     list_control.set_selection_mode(wrt::ListViewSelectionMode::Single)?;
-    
-    // TODO: Fix scroll bars not coming in the list when its height is bigger
-    // than the parent. StackPanel parent might have something to do with this:
-    // https://stackoverflow.com/questions/41140287/horizontal-scroll-for-stackpanel-doesnt-work/41140885#41140885
-    let scroll_viewer_statics = winrt::factory::<wrt::ScrollViewer, wrt::IScrollViewerStatics>()?;
-    scroll_viewer_statics.set_vertical_scroll_mode(&list_control, wrt::ScrollMode::Enabled)?;
+    list_control.set_vertical_alignment(wrt::VerticalAlignment::Stretch)?;
 
     let mut sorted_items = list.to_vec();
     sorted_items.sort_unstable_by_key(|item| item.title.clone());
@@ -345,10 +319,15 @@ pub fn software_bitmap_to_xaml_image(bmp: wrt::SoftwareBitmap) -> winrt::Result<
     return Ok(image_control);
 }
 
+/// Converts a HICON to a SoftwareBitmap that can be used with WinUI controls
+///
+/// Notes:
+/// - There probably is a simpler way to achieve this
+/// - The function does not implement all possiblities described in the Windows API doc
+/// thus it is possible that it might not work for certain icon formats
 pub fn hicon_to_software_bitmap(hicon: winapi::HICON) -> BSResult<wrt::SoftwareBitmap> {
-    // TODO: there exists a .net function called 
     let mut icon_info: winapi::ICONINFO = unsafe { MaybeUninit::uninit().assume_init() };
-    let icon_result = unsafe{ winapi::GetIconInfo(hicon, &mut icon_info) };
+    let icon_result = unsafe { winapi::GetIconInfo(hicon, &mut icon_info) };
     if icon_result == 0 {
         bail!("Couldn't get icon info for HICON {:?}", hicon);
     }
@@ -453,7 +432,7 @@ pub fn hicon_to_software_bitmap(hicon: winapi::HICON) -> BSResult<wrt::SoftwareB
     )?;
     // About the BitmapPixelFormat::Bgra8:
     // Hard coding pixel format to BGRA with 1 byte per color seems to work but it should be
-    // detected since there are guarantees the Windows API will always return this format
+    // detected since there are no guarantees the Windows API will always return this format
 
 
     unsafe {
@@ -463,58 +442,3 @@ pub fn hicon_to_software_bitmap(hicon: winapi::HICON) -> BSResult<wrt::SoftwareB
 
     return Ok(software_bitmap);
 }
-
-
-/// Makes a standard RGBA into a single u32 with premultiplied alpha
-/// as required by MS XAML
-pub fn rgba_to_bgra(r: u8, g: u8, b: u8, a: u8) -> u32 {
-    let res_r = ((r as u32) * (a as u32) / 255) as u32;
-    let res_g = (g * a / 255) as u32;
-    let res_b = (b * a / 255) as u32;
-
-    let b_val = res_b << 24;
-    let g_val = res_g << 16;
-    let r_val = res_r << 8;
-
-    // might not work with big endian
-    b_val | g_val | r_val | a as u32
-}
-
-//
-// These help with creating WinUI dialogs
-//
-// trait InitializeWithWindow {
-//   fn initialize_with_window<O: RuntimeType + ComInterface>(
-//       &self,
-//       object: &O,
-//   ) -> winrt::Result<()>;
-// }
-
-// impl<T> InitializeWithWindow for T
-// where
-//   T: HasRawWindowHandle,
-// {
-//   fn initialize_with_window<O: RuntimeType + ComInterface>(
-//       &self,
-//       object: &O,
-//   ) -> winrt::Result<()> {
-//       // Get the window handle
-//       let window_handle = self.raw_window_handle();
-//       let window_handle = match window_handle {
-//           raw_window_handle::RawWindowHandle::Windows(window_handle) => window_handle.hwnd,
-//           _ => panic!("Unsupported platform!"),
-//       };
-
-//       let init: InitializeWithWindowInterop = object.try_into()?;
-//       init.initialize(window_handle)?;
-//       Ok(())
-//   }
-// }
-
-// eventHandler = move | | -> {
-//   use bindings::windows::ui::popups::MessageDialog;
-//   let dialog = MessageDialog::create("Test").unwrap();
-//   window.initialize_with_window(&dialog).unwrap();
-//   dialog.show_async().unwrap();
-//   println!("KeyState-{}", input.scancode);
-// }
