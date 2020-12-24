@@ -5,7 +5,7 @@ use winapi::um::stringapiset::MultiByteToWideChar;
 
 pub unsafe fn initialize_runtime_com() -> winrt::Result<()> {
   let result = winrt::ErrorCode::from(Ok(RoInitialize(
-    winapi::winrt::roapi::RO_INIT_SINGLETHREADED,
+    winapi::winrt::roapi::RO_INIT_SINGLETHREADED, // TODO: Investigate if we need multithreaded due to winnit event loop
   )));
 
   if result.is_ok() {
