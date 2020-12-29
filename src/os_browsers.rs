@@ -2,7 +2,6 @@ use simple_error::SimpleResult as Result;
 mod winapi {
     pub use winapi::shared::minwindef::DWORD;
     pub use winapi::shared::windef::HICON;
-    pub use winapi::um::shellapi::{SHGetFileInfoW, SHFILEINFOW, SHGFI_ICON, SHGFI_LARGEICON};
     pub use winapi::um::winbase::GetBinaryTypeW;
     pub use winapi::um::winver::{GetFileVersionInfoSizeW, GetFileVersionInfoW, VerQueryValueW};
     pub use winapi::um::errhandlingapi::GetLastError;
@@ -95,7 +94,7 @@ pub fn read_system_browsers_sync() -> Result<Vec<Browser>> {
             ),
         }
 
-        match get_exe_file_icon(&browser.exe_path) {
+        match crate::os_util::get_exe_file_icon(&browser.exe_path) {
             Ok(icon) => browser.handle_icon = icon,
             Err(e) => println!(
                 "Error loading icon from file {}, Reason: {}",
@@ -166,7 +165,7 @@ fn read_exe_arch(path: &str) -> Result<BinaryType> {
     const WINAPI_BITS64: u32 = 6;
     
 
-    let file_path_wide = crate::util::str_to_wide(path);    
+    let file_path_wide = crate::os_util::str_to_wide(path);    
     let mut bin_type: u32 = NONE;
     let api_call_result = unsafe { 
         winapi::GetBinaryTypeW(file_path_wide.as_ptr(), &mut bin_type as *mut u32)
@@ -206,7 +205,7 @@ fn read_exe_arch(path: &str) -> Result<BinaryType> {
 ///  - we ask the for specific values of the properties `ProductName`, `CompanyName`, `ProductVersion` and if they're not `UTF-16` we convert them based on the indicated `Code Page`.
 fn read_exe_version_info(path: &str) -> Result<VersionInfo> {
     const UTF16_WINDOWS_CODE_PAGE: u16 = 1200; 
-    let file_path_wide = crate::util::str_to_wide(path);
+    let file_path_wide = crate::os_util::str_to_wide(path);
     let file_version_size: u32 =
         unsafe { winapi::GetFileVersionInfoSizeW(file_path_wide.as_ptr(), &mut 0) };
     if file_version_size == 0 {
@@ -245,7 +244,7 @@ fn read_exe_version_info(path: &str) -> Result<VersionInfo> {
         // the number of bytes VerQueryValueW has written for the the requested sub block from within the `version_info_blob`
         let mut out_size: u32 = 0;
         
-        let translations_sub_block = crate::util::str_to_wide("\\VarFileInfo\\Translation");
+        let translations_sub_block = crate::os_util::str_to_wide("\\VarFileInfo\\Translation");
 
         let result = winapi::VerQueryValueW(
             version_info_blob.as_ptr() as *mut std::ffi::c_void,
@@ -302,7 +301,7 @@ fn read_exe_version_info(path: &str) -> Result<VersionInfo> {
             let mut out_size: u32 = 0;      
             let result = winapi::VerQueryValueW(
                 version_info_blob.as_ptr() as *mut std::ffi::c_void,
-                crate::util::str_to_wide(block).as_ptr(),
+                crate::os_util::str_to_wide(block).as_ptr(),
                 &mut out_pointer,
                 &mut out_size,
             );
@@ -317,12 +316,12 @@ fn read_exe_version_info(path: &str) -> Result<VersionInfo> {
             if translation.wCodePage != UTF16_WINDOWS_CODE_PAGE {
                 // TODO: do we need to std::mem::forget this because it's technically part of the version_info_blob?
                 let raw_string = std::slice::from_raw_parts(out_pointer as *const i8, out_size as usize).to_vec();
-                raw_wide_string = crate::util::ansi_str_to_wide(&raw_string, translation.wCodePage)?;
+                raw_wide_string = crate::os_util::ansi_str_to_wide(&raw_string, translation.wCodePage)?;
             } else {
                 raw_wide_string = std::slice::from_raw_parts(out_pointer as *const u16, out_size as usize).to_vec();
             }
 
-            let result_str = crate::util::wide_to_str(&raw_wide_string);       
+            let result_str = crate::os_util::wide_to_str(&raw_wide_string);       
             results.push(result_str);
         }
 
@@ -341,33 +340,6 @@ fn read_exe_version_info(path: &str) -> Result<VersionInfo> {
             bail!("Not all required props were found.");
         }
     }
-}
-
-pub fn get_exe_file_icon(path: &str) -> Result<winapi::HICON> {
-    let wide_path = crate::util::str_to_wide(&path);
-    let mut file_info: winapi::SHFILEINFOW =
-        unsafe { std::mem::MaybeUninit::zeroed().assume_init() };
-    let res = unsafe {
-        winapi::SHGetFileInfoW(
-            wide_path.as_ptr(),
-            0,
-            &mut file_info,
-            std::mem::size_of_val(&file_info) as u32,
-            winapi::SHGFI_ICON | winapi::SHGFI_LARGEICON,
-        )
-    };
-
-    if res == 0 {
-        bail!("Cannot get icon with SHGetFileInfoW for {}", path);
-    }
-
-    // Icons given by this function should be destroyed
-    // with DestroyIcon. At the same time, according to this
-    // https://docs.microsoft.com/en-gb/windows/win32/api/winuser/nf-winuser-loadimagea?redirectedfrom=MSDN#remarks
-    // it looks like resources are automatically released
-    // when the program ends which is what we need here
-    // ToDO: investigate if this causes any memory leaks
-    Ok(file_info.hIcon)
 }
 
 pub fn open_url(url: &String, browser: &Browser) {

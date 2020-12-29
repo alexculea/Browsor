@@ -13,7 +13,7 @@ mod wrt {
         DataWriter, IDataWriterFactory, IBuffer,
     };
 
-    pub use bindings::windows::foundation::PropertyValue;
+    pub use bindings::windows::foundation::{IReference, IStringable, PropertyValue, IPropertyValue, PropertyType};
     pub use bindings::windows::ui::xaml::controls::{
         Button, IButtonFactory, IListBoxFactory, IListViewFactory, IRelativePanelFactory,
         IStackPanelFactory, ListBox, ListView, ListViewSelectionMode, RelativePanel, StackPanel,
@@ -25,7 +25,8 @@ mod wrt {
         RowDefinition,
         ColumnDefinition,
         IGridFactory,
-        IGridStatics
+        ItemsControl,
+        Panel
     };
     pub use bindings::windows::ui::xaml::{
         RoutedEventHandler,
@@ -65,15 +66,22 @@ mod winapi {
     };
 }
 
-
-use winit::event_loop::EventLoopProxy;
-
-// use crate::initialize_with_window::*;
 use crate::desktop_window_xaml_source::IDesktopWindowXamlSourceNative;
-use crate::util::{get_hwnd, as_u8_slice};
-use crate::error::{BSResult, BSError};
+use crate::os_util::{get_hwnd, as_u8_slice, initialize_runtime_com};
+use crate::error::*;
+
+use winit::window::Window;
+use winit::dpi::PhysicalSize;
 
 use winrt::ComInterface;
+use crate::ui::UserInterface;
+use crate::ui::ListItem;
+use crate::ui::Image;
+
+#[derive(Default)]
+pub struct BrowserSelectorUI {
+    state: Option<UI>
+}
 
 #[derive(Debug)]
 pub enum BSEvent {
@@ -114,17 +122,115 @@ impl Default for XamlIslandWindow {
     }
 }
 
-#[derive(Clone)]
-pub struct ListItem {
-    pub title: String,
-    pub subtitle: String,
-    pub image: wrt::Image,
+#[derive(Default)]
+pub struct UI {
+    pub xaml_isle: XamlIslandWindow,
+    pub browser_list: Vec<crate::ui::ListItem>,
+    pub container: wrt::Panel
 }
 
-pub struct UI<'a> {
-    pub xaml_isle: &'a XamlIslandWindow,
-    pub browser_list: &'a Vec<ListItem>,
-    pub url: &'a str,
+const LIST_CONTROL_NAME: &str = "browserList";
+const URL_CONTROL_NAME: &str = "urlControl";
+const HEADER_PANEL_NAME: &str = "headerPanel";
+
+
+impl UserInterface for BrowserSelectorUI {
+    fn new() -> BSResult<BrowserSelectorUI> {
+       // TODO: Correct error handling
+       unsafe { initialize_runtime_com()?; }
+
+       // Initialize WinUI XAML before creating the winit EventLoop
+       // or winit throws: thread 'main'
+       // panicked at 'either event handler is re-entrant (likely), or no event
+       // handler is registered (very unlikely)'
+       let state = Some(UI {
+           xaml_isle: init_win_ui_xaml()?,
+           browser_list: Vec::<ListItem>::new(),
+           container: wrt::Panel::default(),
+       });
+
+       Ok(BrowserSelectorUI { state })
+    }
+
+    fn create(&mut self, window: &Window) -> BSResult<()> {
+        let size = window.inner_size();
+        if let Some(state) = &mut self.state {
+            state.xaml_isle.hwnd = attach_window_to_xaml(&window, &mut state.xaml_isle)?;
+            update_xaml_island_size(&state.xaml_isle, size)?;
+            unsafe {
+                winapi::UpdateWindow(state.xaml_isle.hwnd_parent as winapi::HWND);
+            }
+    
+            let ui_container = create_ui(&state)?;
+            
+            state.xaml_isle.desktop_source.set_content(ui_container.to_owned())?;
+            state.container = ComInterface::query::<wrt::Panel>(&ui_container);
+        }
+
+        Ok(())
+    }
+
+    fn update_layout_size(&self, _: &Window, size: &PhysicalSize<u32>) -> BSResult<()> {
+        let state = get_state_or_error(self)?;
+        update_xaml_island_size(&state.xaml_isle, *size)?;
+        
+        Ok(())
+    }
+
+    fn set_list(&self, list: &Vec<ListItem>) -> BSResult<()> {
+        let state = get_state_or_error(self)?;
+        if let Some(ui_element) = recursive_find_child_by_tag(&state.container, LIST_CONTROL_NAME)? {
+            let listview = ComInterface::query::<wrt::ListView>(&ui_element);
+            set_listview_items(&listview, list).unwrap();
+        }
+        
+        Ok(())
+    }
+
+    fn set_url(&self, new_url: &str) -> BSResult<()> {
+        let state = get_state_or_error(self)?;
+        if let Some(ui_element) = recursive_find_child_by_tag(&state.container, URL_CONTROL_NAME)? {
+            let text_block = ComInterface::query::<wrt::TextBlock>(&ui_element);
+            text_block.set_text(new_url)?;
+        }
+        
+        Ok(())
+    }
+
+    fn load_image(path: &str) -> BSResult<Image> {
+        let hicon = crate::os_util::get_exe_file_icon(path)?;
+        let bmp = hicon_to_software_bitmap(hicon)?;
+        
+        match software_bitmap_to_xaml_image(bmp) {
+            Ok(image) => Ok(image),
+            Err(winrt_error) => Err(BSError::from(winrt_error))
+        }
+    }
+
+    fn select_list_item_by_index(&self, index: u32) -> BSResult<()> {
+        let state = get_state_or_error(self)?;
+        
+        Ok(())
+    }
+
+    fn select_list_item_by_uuid(&self, uuid: &str) -> BSResult<()> {
+        Ok(())
+    }
+    fn get_selected_list_item_index(&self) -> BSResult<u32> {
+        Ok(0)
+    }
+    fn get_selected_list_item(&self) -> BSResult<Option<ListItem>> {
+        Ok(None)
+    }
+
+    fn on_list_item_selected(&self, event_handler: fn(&ListItem) -> ()) -> BSResult<()> {
+        Ok(())
+    }
+}
+
+
+fn get_state_or_error(ui: &BrowserSelectorUI) -> BSResult<&UI> {
+    ui.state.as_ref().ok_or(BSError::new("No UI state, state lost or not initialized fully"))
 }
 
 pub fn init_win_ui_xaml() -> winrt::Result<XamlIslandWindow> {
@@ -171,13 +277,13 @@ pub fn update_xaml_island_size(
 }
 
 pub fn create_ui(ui: &UI) -> winrt::Result<wrt::UIElement> {
-    let header_panel = create_header("You are about to open:", ui.url)?;
-    let list = create_list(ui.browser_list)?;
+    let header_panel = create_header("You are about to open:", "")?;
+    let list = create_list(&ui.browser_list)?;
     let grid = create_main_layout_grid()?;
-    
+
     wrt::Grid::set_row(ComInterface::query::<wrt::FrameworkElement>(&header_panel), 0)?;
-    wrt::Grid::set_row(ComInterface::query::<wrt::FrameworkElement>(&list), 1)?;
     wrt::Grid::set_column(ComInterface::query::<wrt::FrameworkElement>(&header_panel), 0)?;
+    wrt::Grid::set_row(&ComInterface::query::<wrt::FrameworkElement>(&list), 1)?;
     wrt::Grid::set_column(ComInterface::query::<wrt::FrameworkElement>(&list), 0)?;
 
     grid.children()?.append(header_panel)?;
@@ -216,7 +322,7 @@ pub fn create_main_layout_grid() -> winrt::Result<wrt::Grid> {
     Ok(grid)
 }
 
-pub fn create_list_item(title: &str, subtext: &str, image: wrt::Image) -> winrt::Result<wrt::UIElement> {
+pub fn create_list_item(title: &str, subtext: &str, image: &wrt::Image, tag: &str) -> winrt::Result<wrt::UIElement> {
     let list_item_margins = wrt::Thickness {
         top: 0.,
         left: 15.,
@@ -239,6 +345,8 @@ pub fn create_list_item(title: &str, subtext: &str, image: wrt::Image) -> winrt:
     name_version_stack_panel.children()?.append(subtitle_block)?;
     root_stack_panel.children()?.append(image)?;
     root_stack_panel.children()?.append(name_version_stack_panel)?;
+    ui_element_set_string_tag(&root_stack_panel, tag).unwrap();
+
     Ok(root_stack_panel.into())
 }
 
@@ -249,7 +357,7 @@ pub fn create_stack_panel() -> winrt::Result<wrt::StackPanel> {
     Ok(stack_panel)
 }
 
-pub fn create_list(list: &[ListItem]) -> winrt::Result<wrt::UIElement> {
+pub fn create_list(list: &Vec<ListItem>) -> winrt::Result<wrt::UIElement> {
     let list_control = winrt::factory::<wrt::ListView, wrt::IListViewFactory>()?
         .create_instance(winrt::Object::default(), &mut winrt::Object::default())?;
     list_control.set_margin(wrt::Thickness {
@@ -261,33 +369,45 @@ pub fn create_list(list: &[ListItem]) -> winrt::Result<wrt::UIElement> {
     list_control.set_selection_mode(wrt::ListViewSelectionMode::Single)?;
     list_control.set_vertical_alignment(wrt::VerticalAlignment::Stretch)?;
 
-    let mut sorted_items = list.to_vec();
-    sorted_items.sort_unstable_by_key(|item| item.title.clone());
-    for item in sorted_items {
-        let item = create_list_item(
-            item.title.as_str(),
-            item.subtitle.as_str(),
-            item.image,
-        )?;
-        list_control.items()?.append(winrt::Object::from(item))?;
-    }
+    set_listview_items(&list_control, list)?;
     list_control.set_selected_index(0)?;
-
+    
+    ui_element_set_string_tag(&list_control, LIST_CONTROL_NAME).unwrap(); 
+    // ^-- .unwrap() is not consistent with the rest of error handling
+    // however this is extremly unlikely to occur so a panic is OK here
+    
     Ok(list_control.into())
+}
+
+pub fn set_listview_items(list_control: &wrt::ListView, list: &Vec<ListItem>) -> winrt::Result<()> {
+    for item in list {
+        list_control.items()?.append(winrt::Object::from(
+            create_list_item(
+                item.title.as_str(),
+                item.subtitle.as_str(),
+                &item.image,
+                item.uuid.to_string().as_str(),
+            )?
+        ))?;
+    }
+
+    Ok(())
 }
 
 pub fn create_header(open_action_text: &str, url: &str) -> winrt::Result<wrt::StackPanel> {
     let stack_panel = winrt::factory::<wrt::StackPanel, wrt::IStackPanelFactory>()?
-    .create_instance(
-        winrt::Object::default(),
-        &mut winrt::Object::default()
-    )?;
+        .create_instance(winrt::Object::default(), &mut winrt::Object::default())?;
     let call_to_action_top_row = wrt::TextBlock::new()?;
     let call_to_action_bottom_row = wrt::TextBlock::new()?;
+
     call_to_action_top_row.set_text(open_action_text)?;
     call_to_action_bottom_row.set_text(url)?;
+
+    call_to_action_bottom_row.set_tag(wrt::PropertyValue::create_string(URL_CONTROL_NAME)?)?;
+    stack_panel.set_tag(wrt::PropertyValue::create_string(HEADER_PANEL_NAME)?)?;
+
     stack_panel.children()?.append(call_to_action_top_row)?;
-    stack_panel.children()?.append(call_to_action_bottom_row)?;
+    stack_panel.children()?.append(call_to_action_bottom_row)?;    
 
     Ok(stack_panel)
 }
@@ -441,4 +561,80 @@ pub fn hicon_to_software_bitmap(hicon: winapi::HICON) -> BSResult<wrt::SoftwareB
     }
 
     return Ok(software_bitmap);
+}
+
+
+fn recursive_find_child_by_tag(parent: &impl winrt::ComInterface, needle: &str) -> winrt::Result<Option<wrt::UIElement>> {
+    let items_control: wrt::Panel = parent.query();
+    if items_control.is_null() {
+        return Err(winrt::Error::new(
+            winrt::ErrorCode(1),
+            "Parent given could not be cast to WinUI Panel. Check the given control inherits from Panel."
+        ));        
+    }
+
+    let _items_count = items_control.children()?.size()?;
+    let iterator = items_control.children()?.first()?;
+    let mut element_found = wrt::UIElement::default();
+    while iterator.has_current()? {
+        let current = iterator.current()?;
+        let child_of_current = match recursive_find_child_by_tag(&current, needle) {
+            Ok(Some(found_child)) => found_child, // matches when a children of 'current' has the tag string equal to 'needle'
+            _ => wrt::UIElement::default(), // matches when either error or no item was found, also applies when 'current' is not
+            // a type of Control that inhertis from Panel (ie. the control does not have children)
+        };
+
+        if !child_of_current.is_null() {
+            element_found = child_of_current;
+            break;
+        }
+
+        let tag_value = match ui_element_get_tag_as_string(&current) {
+            Ok(Some(string_value)) => string_value,
+            _ => String::default(),
+        };
+        
+        if tag_value == needle {
+            element_found = current;
+            break;
+        }
+
+        iterator.move_next()?;
+    }
+
+    match element_found.is_null() {
+        true => Ok(None),
+        false => Ok(Some(element_found))
+    }
+}
+
+fn ui_element_get_tag_as_string(el: &impl ComInterface) -> BSResult<Option<String>> {
+    let item_as_framework_elem = ComInterface::query::<wrt::FrameworkElement>(el);
+    if item_as_framework_elem.is_null() {
+        bail!("Element given in not valid or does not inherit from FrameworkElement");
+    }
+
+    let tag: wrt::IPropertyValue = item_as_framework_elem.tag()?.query();
+    if tag.is_null() {
+        return Ok(None);
+    }
+
+    let tag_type = tag.r#type()?;
+    if tag_type != wrt::PropertyType::String {
+        bail!("Element tag is set but it is not a string.");
+    }
+
+    let value: String = tag.get_string()?.into();
+    Ok(Some(value))
+}
+
+fn ui_element_set_string_tag(el: &impl ComInterface, tag: &str) -> BSResult<()> {
+    let item_as_framework_elem = ComInterface::query::<wrt::FrameworkElement>(el);
+    if item_as_framework_elem.is_null() {
+        bail!("Element given in not valid or does not inherit from FrameworkElement");
+    }
+
+    item_as_framework_elem.set_tag(wrt::PropertyValue::create_string(tag)?)?;
+
+    Ok(())
 }
