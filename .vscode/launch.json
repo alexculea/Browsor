@@ -6,7 +6,7 @@
             "type": "cppvsdbg",
             "request": "launch",
             "program": "${workspaceFolder}/target/debug/browser-selector.exe",
-            "args": [],
+            "args": ["https://www.google.com"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [],
@@ -17,7 +17,7 @@
             "type": "lldb",
             "request": "launch",
             "program": "${workspaceFolder}/target/debug/browser-selector.exe",
-            "args": [],
+            "args": ["https://www.google.com"],
             "cwd": "${workspaceFolder}"
         }
     ]

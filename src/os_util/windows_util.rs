@@ -1,21 +1,24 @@
 use simple_error::SimpleResult as Result;
 use raw_window_handle::HasRawWindowHandle;
-use winapi::winrt::roapi::RoInitialize;
+
 use winapi::um::stringapiset::MultiByteToWideChar;
+use crate::error::*;
 
-pub unsafe fn initialize_runtime_com() -> winrt::Result<()> {
-  let result = winrt::ErrorCode::from(Ok(RoInitialize(
-    winapi::winrt::roapi::RO_INIT_SINGLETHREADED, // TODO: Investigate if we need multithreaded due to winnit event loop
-  )));
+// TODO: Do we really need this function?
+// use winapi::winrt::roapi::RoInitialize;
+// pub unsafe fn initialize_runtime_com() -> winrt::Result<()> {
+//   let result = winrt::ErrorCode::from(Ok(RoInitialize(
+//     winapi::winrt::roapi::RO_INIT_MULTITHREADED, // TODO: Investigate if we need multithreaded due to winnit event loop
+//   )));
 
-  if result.is_ok() {
-    return winrt::Result::Ok(());
-  }
+//   if result.is_ok() {
+//     return winrt::Result::Ok(());
+//   }
 
-  winapi::um::combaseapi::CoInitializeEx(std::ptr::null_mut(), 0x2);
+//   winapi::um::combaseapi::CoInitializeEx(std::ptr::null_mut(), 0x2);
 
-  return Err(winrt::Error::from(result));
-}
+//   return Err(winrt::Error::from(result));
+// }
 
 pub fn get_hwnd(window: &winit::window::Window) -> winapi::shared::windef::HWND {
   match window.raw_window_handle() {
@@ -26,11 +29,12 @@ pub fn get_hwnd(window: &winit::window::Window) -> winapi::shared::windef::HWND 
   }
 }
 
-pub fn hide_window(window: &winit::window::Window) {
-  unsafe {
-    winapi::um::winuser::ShowWindow(get_hwnd(window), winapi::um::winuser::SW_HIDE);
-  }
-}
+// TODO: Uncomment when implementing always on background running
+// pub fn hide_window(window: &winit::window::Window) {
+//   unsafe {
+//     winapi::um::winuser::ShowWindow(get_hwnd(window), winapi::um::winuser::SW_HIDE);
+//   }
+// }
 
 pub fn str_to_wide(string: &str) -> Vec<u16> {
   use std::ffi::OsStr;
@@ -105,4 +109,55 @@ pub fn get_exe_file_icon(path: &str) -> Result<winapi::shared::windef::HICON> {
   // when the program ends which is what we need here
   // ToDO: investigate if this causes any memory leaks
   Ok(file_info.hIcon)
+}
+
+pub fn _get_config_directory() -> BSResult<String> {
+  use winapi::um::shlobj::SHGetKnownFolderPath;
+  use winapi::um::knownfolders::FOLDERID_RoamingAppData;
+  use winapi::shared::winerror::S_OK;
+  use winapi::um::combaseapi::CoTaskMemFree;
+
+  let mut wide_system_path: *mut u16 = std::ptr::null_mut();
+  let result_path: BSResult<String> = unsafe {
+    match SHGetKnownFolderPath(&FOLDERID_RoamingAppData, 0, std::ptr::null_mut(), &mut wide_system_path) {
+      S_OK => {
+        //let string_length = 0;
+        let mut buff = Vec::<u16>::new();
+        for i in 0usize.. {
+          if *wide_system_path.offset(i as isize) == 0 {
+            buff = Vec::<u16>::from_raw_parts(wide_system_path, i, i);
+          }
+        }
+
+        let path = wide_to_str(&buff);
+
+        std::mem::forget(buff); // from_raw_parts does not clone the buffer
+        // we need to allow the buffer to exist after the vec is dealocated
+        // as we free the memory using CoTaskMemFree as recommended by the WinAPI
+        
+        Ok(path)
+      }
+      code => Err(BSError::from(
+        format!("Error getting OS config directory. Error code: {:?}", code).as_str()
+      ))
+    }
+  };
+
+  unsafe { CoTaskMemFree(wide_system_path as *mut std::ffi::c_void) };
+  result_path
+}
+
+pub fn _get_create_config_directory(app_name: &str, env_name: &str) -> BSResult<String> {
+  let app_data_dir = _get_config_directory()?;
+  let os_path = std::path::Path::new(&app_data_dir);
+  let subpath = format!("{}/{}", app_name, env_name);
+  let app_env_path = std::path::Path::new(&subpath);
+  let full_path = os_path.join(app_env_path);
+  let full_path_str = full_path.to_string_lossy().to_string();
+
+  if std::fs::create_dir_all(&full_path).is_err() {
+    bail!("Error creating config path {}", full_path_str);
+  }
+
+  Ok(full_path_str)
 }

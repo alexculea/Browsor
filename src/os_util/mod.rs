@@ -1,6 +1,9 @@
 
-#[cfg(target_os = "windows")]
-mod windows;
+#[cfg(target_os = "windows")] mod windows_util;
+#[cfg(target_os = "windows")] mod windows_browsers;
+#[cfg(target_os = "windows")] pub use windows_util::*;
 
-#[cfg(target_os = "windows")]
-pub use windows::*;
+pub mod os_browsers {
+  #[cfg(target_os = "windows")] pub use super::windows_browsers::*;
+}
+

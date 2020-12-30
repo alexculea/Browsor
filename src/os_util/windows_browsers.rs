@@ -8,9 +8,6 @@ mod winapi {
     pub use winapi::um::winnls::GetUserDefaultUILanguage;
 }
 
-// https://docs.microsoft.com/en-us/windows/win32/fileio/naming-a-file#maximum-path-length-limitation
-const WINDOWS_LONG_PATH_PREFIX: &str = r#"\\?\"#;
-
 #[derive(Debug, Clone)]
 pub struct Browser {
     pub exe_path: String,
@@ -72,12 +69,10 @@ pub fn read_system_browsers_sync() -> Result<Vec<Browser>> {
     // windows registry
     let path32 = "SOFTWARE\\Clients\\StartMenuInternet";
     let path64 = "SOFTWARE\\WOW6432Node\\Clients\\StartMenuInternet";
-
     let mut list = [
         read_browsers_from_reg_path_sync(path32)?,
         read_browsers_from_reg_path_sync(path64)?,
-    ]
-    .concat();
+    ].concat();
     
     // dedup below only compares current with next element
     // lists need to be sorted for dedup_by to work
@@ -85,7 +80,6 @@ pub fn read_system_browsers_sync() -> Result<Vec<Browser>> {
     list.dedup_by(|a, b| a.exe_path == b.exe_path);
 
     for browser in list.iter_mut() {
-        // let version = read_browser_exe_version_info(&[WINDOWS_LONG_PATH_PREFIX, &browser.exe_path].concat());
         match read_browser_exe_info(&browser.exe_path) {
             Ok(version) => browser.version = version,
             Err(e) => println!(
@@ -109,7 +103,7 @@ fn read_browsers_from_reg_path_sync(win_reg_path: &str) -> Result<Vec<Browser>> 
     let mut browsers: Vec<Browser> = Vec::new();
     let root = winreg::RegKey::predef(winreg::enums::HKEY_LOCAL_MACHINE)
         .open_subkey(win_reg_path)
-        .unwrap();
+        .unwrap(); // TODO: grecefully handle error instead of panicing
 
     for key in root.enum_keys().map(|x| x.unwrap()) {
         match read_browser_info_from_reg_key(&[win_reg_path, "\\", &key].join("")) {
@@ -148,10 +142,10 @@ fn read_browser_info_from_reg_key(reg_path: &str) -> std::io::Result<Browser> {
 }
 
 fn read_browser_exe_info(path: &str) -> Result<VersionInfo> {
-    let mut returnValue = read_exe_version_info(path)?;
-    returnValue.binary_type = read_exe_arch(path)?;
+    let mut ver_info = read_exe_version_info(path)?;
+    ver_info.binary_type = read_exe_arch(path)?;
 
-    Ok(returnValue)
+    Ok(ver_info)
 }
 
 /// For the given `path` it returns the architecture of the 
@@ -186,8 +180,8 @@ fn read_exe_arch(path: &str) -> Result<BinaryType> {
     })   
 }
 
-/// Reads certain file attributes specific to Windows executables as per the fields
-/// in `VersionInfo` struct based on the given `path`
+/// Reads file attributes specific to Windows executables as per the fields
+/// in `VersionInfo` struct based on the given `path`.
 ///
 /// The fields read are:
 /// - ProductName
@@ -232,6 +226,7 @@ fn read_exe_version_info(path: &str) -> Result<VersionInfo> {
 
         #[repr(C)]
         #[derive(Debug)]
+        #[allow(non_snake_case)]
         struct LANGANDCODEPAGE {
             wLanguage: u16,
             wCodePage: u16
@@ -311,8 +306,7 @@ fn read_exe_version_info(path: &str) -> Result<VersionInfo> {
                 continue;
             }
 
-            let mut raw_wide_string: Vec<u16> = vec!(0);
-            
+            let raw_wide_string: Vec<u16>;
             if translation.wCodePage != UTF16_WINDOWS_CODE_PAGE {
                 // TODO: do we need to std::mem::forget this because it's technically part of the version_info_blob?
                 let raw_string = std::slice::from_raw_parts(out_pointer as *const i8, out_size as usize).to_vec();

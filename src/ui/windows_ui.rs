@@ -1,3 +1,4 @@
+
 use std::mem::MaybeUninit;
 use std::convert::TryInto;
 
@@ -15,7 +16,7 @@ mod wrt {
 
     pub use bindings::windows::foundation::{IReference, IStringable, PropertyValue, IPropertyValue, PropertyType};
     pub use bindings::windows::ui::xaml::controls::{
-        Button, IButtonFactory, IListBoxFactory, IListViewFactory, IRelativePanelFactory,
+        Button, IButtonFactory, IListBoxFactory, IListViewFactory, IRelativePanelFactory, ItemClickEventHandler, ItemClickEventArgs,
         IStackPanelFactory, ListBox, ListView, ListViewSelectionMode, RelativePanel, StackPanel,
         ScrollViewer, ScrollMode, IScrollViewerStatics,
         Orientation,
@@ -66,27 +67,21 @@ mod winapi {
     };
 }
 
-use crate::desktop_window_xaml_source::IDesktopWindowXamlSourceNative;
-use crate::os_util::{get_hwnd, as_u8_slice, initialize_runtime_com};
+use crate::ui::windows_desktop_window_xaml_source::IDesktopWindowXamlSourceNative;
+use crate::os_util::{get_hwnd, as_u8_slice};
 use crate::error::*;
 
 use winit::window::Window;
 use winit::dpi::PhysicalSize;
-
 use winrt::ComInterface;
+
 use crate::ui::UserInterface;
 use crate::ui::ListItem;
 use crate::ui::Image;
 
 #[derive(Default)]
-pub struct BrowserSelectorUI {
-    state: Option<UI>
-}
-
-#[derive(Debug)]
-pub enum BSEvent {
-    BrowserSelected(u32),
-    Close,
+pub struct BrowserSelectorUI<ItemStateType:Clone> {
+    state: UI<ItemStateType>
 }
 
 pub struct XamlIslandWindow {
@@ -123,10 +118,10 @@ impl Default for XamlIslandWindow {
 }
 
 #[derive(Default)]
-pub struct UI {
+pub struct UI<T: Clone> {
     pub xaml_isle: XamlIslandWindow,
-    pub browser_list: Vec<crate::ui::ListItem>,
-    pub container: wrt::Panel
+    pub list: Vec<crate::ui::ListItem<T>>,
+    pub container: wrt::Panel,
 }
 
 const LIST_CONTROL_NAME: &str = "browserList";
@@ -134,53 +129,51 @@ const URL_CONTROL_NAME: &str = "urlControl";
 const HEADER_PANEL_NAME: &str = "headerPanel";
 
 
-impl UserInterface for BrowserSelectorUI {
-    fn new() -> BSResult<BrowserSelectorUI> {
+impl<ItemStateType: Clone> UserInterface<ItemStateType> for BrowserSelectorUI<ItemStateType> {
+    fn new() -> BSResult<Self> {
        // TODO: Correct error handling
-       unsafe { initialize_runtime_com()?; }
+       // unsafe { initialize_runtime_com()?; }
 
        // Initialize WinUI XAML before creating the winit EventLoop
        // or winit throws: thread 'main'
        // panicked at 'either event handler is re-entrant (likely), or no event
        // handler is registered (very unlikely)'
-       let state = Some(UI {
+       let state = UI {
            xaml_isle: init_win_ui_xaml()?,
-           browser_list: Vec::<ListItem>::new(),
+           list: Vec::<ListItem<ItemStateType>>::new(),
            container: wrt::Panel::default(),
-       });
+       };
 
        Ok(BrowserSelectorUI { state })
     }
 
     fn create(&mut self, window: &Window) -> BSResult<()> {
         let size = window.inner_size();
-        if let Some(state) = &mut self.state {
-            state.xaml_isle.hwnd = attach_window_to_xaml(&window, &mut state.xaml_isle)?;
-            update_xaml_island_size(&state.xaml_isle, size)?;
-            unsafe {
-                winapi::UpdateWindow(state.xaml_isle.hwnd_parent as winapi::HWND);
-            }
-    
-            let ui_container = create_ui(&state)?;
-            
-            state.xaml_isle.desktop_source.set_content(ui_container.to_owned())?;
-            state.container = ComInterface::query::<wrt::Panel>(&ui_container);
+        self.state.xaml_isle.hwnd = attach_window_to_xaml(&window, &mut self.state.xaml_isle)?;
+        update_xaml_island_size(&self.state.xaml_isle, size)?;
+        unsafe {
+            winapi::UpdateWindow(self.state.xaml_isle.hwnd_parent as winapi::HWND);
         }
+
+        let ui_container = create_ui(&self.state)?;
+        
+        self.state.xaml_isle.desktop_source.set_content(ui_container.to_owned())?;
+        self.state.container = ComInterface::query::<wrt::Panel>(&ui_container);
+        
 
         Ok(())
     }
 
     fn update_layout_size(&self, _: &Window, size: &PhysicalSize<u32>) -> BSResult<()> {
-        let state = get_state_or_error(self)?;
-        update_xaml_island_size(&state.xaml_isle, *size)?;
+        update_xaml_island_size(&self.state.xaml_isle, *size)?;
         
         Ok(())
     }
 
-    fn set_list(&self, list: &Vec<ListItem>) -> BSResult<()> {
-        let state = get_state_or_error(self)?;
-        if let Some(ui_element) = recursive_find_child_by_tag(&state.container, LIST_CONTROL_NAME)? {
+    fn set_list(&mut self, list: &[ListItem<ItemStateType>]) -> BSResult<()> {
+        if let Some(ui_element) = recursive_find_child_by_tag(&self.state.container, LIST_CONTROL_NAME)? {
             let listview = ComInterface::query::<wrt::ListView>(&ui_element);
+            self.state.list = list.clone().to_vec();
             set_listview_items(&listview, list).unwrap();
         }
         
@@ -188,8 +181,7 @@ impl UserInterface for BrowserSelectorUI {
     }
 
     fn set_url(&self, new_url: &str) -> BSResult<()> {
-        let state = get_state_or_error(self)?;
-        if let Some(ui_element) = recursive_find_child_by_tag(&state.container, URL_CONTROL_NAME)? {
+        if let Some(ui_element) = recursive_find_child_by_tag(&self.state.container, URL_CONTROL_NAME)? {
             let text_block = ComInterface::query::<wrt::TextBlock>(&ui_element);
             text_block.set_text(new_url)?;
         }
@@ -208,29 +200,49 @@ impl UserInterface for BrowserSelectorUI {
     }
 
     fn select_list_item_by_index(&self, index: u32) -> BSResult<()> {
-        let state = get_state_or_error(self)?;
+        let list_control: wrt::ListView = recursive_find_child_by_tag(&self.state.container, LIST_CONTROL_NAME)
+            .unwrap()
+            .unwrap()
+            .query();
+        
+        list_control.set_selected_index(index as i32)?;
         
         Ok(())
     }
 
-    fn select_list_item_by_uuid(&self, uuid: &str) -> BSResult<()> {
+    fn get_selected_list_item_index(&self) -> BSResult<i32> {
+        let list_control: wrt::ListView = recursive_find_child_by_tag(&self.state.container, LIST_CONTROL_NAME)
+            .unwrap()
+            .unwrap()
+            .query();
+    
+        Ok(list_control.selected_index()?)
+    }
+    fn get_selected_list_item(&self) -> BSResult<Option<ListItem<ItemStateType>>> {
+        let selected_index = self.get_selected_list_item_index()?;
+        if selected_index < 0 {
+            return Ok(None);
+        }
+
+        let cloned_item = self.state.list[selected_index as usize].clone();        
+        Ok(Some(cloned_item))
+    }
+
+    fn on_list_item_selected(&self, mut event_handler: impl FnMut(&str) -> () + 'static) -> BSResult<()> {
+        let list_control: wrt::ListView = recursive_find_child_by_tag(&self.state.container, LIST_CONTROL_NAME)
+            .unwrap()
+            .unwrap()
+            .query();
+        list_control.set_is_item_click_enabled(true)?;
+        list_control.item_click(wrt::ItemClickEventHandler::new(move |_: &winrt::Object, event: &wrt::ItemClickEventArgs| -> winrt::Result<()> {
+            let item_tag = ui_element_get_tag_as_string(&event.clicked_item()?).unwrap().unwrap();
+            event_handler(item_tag.as_str());
+
+            Ok(())
+        }))?;
+
         Ok(())
     }
-    fn get_selected_list_item_index(&self) -> BSResult<u32> {
-        Ok(0)
-    }
-    fn get_selected_list_item(&self) -> BSResult<Option<ListItem>> {
-        Ok(None)
-    }
-
-    fn on_list_item_selected(&self, event_handler: fn(&ListItem) -> ()) -> BSResult<()> {
-        Ok(())
-    }
-}
-
-
-fn get_state_or_error(ui: &BrowserSelectorUI) -> BSResult<&UI> {
-    ui.state.as_ref().ok_or(BSError::new("No UI state, state lost or not initialized fully"))
 }
 
 pub fn init_win_ui_xaml() -> winrt::Result<XamlIslandWindow> {
@@ -276,9 +288,9 @@ pub fn update_xaml_island_size(
     Ok(())
 }
 
-pub fn create_ui(ui: &UI) -> winrt::Result<wrt::UIElement> {
+pub fn create_ui<T:Clone>(ui: &UI<T>) -> winrt::Result<wrt::UIElement> {
     let header_panel = create_header("You are about to open:", "")?;
-    let list = create_list(&ui.browser_list)?;
+    let list = create_list(&ui.list)?;
     let grid = create_main_layout_grid()?;
 
     wrt::Grid::set_row(ComInterface::query::<wrt::FrameworkElement>(&header_panel), 0)?;
@@ -357,7 +369,7 @@ pub fn create_stack_panel() -> winrt::Result<wrt::StackPanel> {
     Ok(stack_panel)
 }
 
-pub fn create_list(list: &Vec<ListItem>) -> winrt::Result<wrt::UIElement> {
+pub fn create_list<T:Clone>(list: &Vec<ListItem<T>>) -> winrt::Result<wrt::UIElement> {
     let list_control = winrt::factory::<wrt::ListView, wrt::IListViewFactory>()?
         .create_instance(winrt::Object::default(), &mut winrt::Object::default())?;
     list_control.set_margin(wrt::Thickness {
@@ -379,14 +391,14 @@ pub fn create_list(list: &Vec<ListItem>) -> winrt::Result<wrt::UIElement> {
     Ok(list_control.into())
 }
 
-pub fn set_listview_items(list_control: &wrt::ListView, list: &Vec<ListItem>) -> winrt::Result<()> {
+pub fn set_listview_items<T:Clone>(list_control: &wrt::ListView, list: &[ListItem<T>]) -> winrt::Result<()> {
     for item in list {
         list_control.items()?.append(winrt::Object::from(
             create_list_item(
                 item.title.as_str(),
                 item.subtitle.as_str(),
                 &item.image,
-                item.uuid.to_string().as_str(),
+                item.uuid.as_str(),
             )?
         ))?;
     }
