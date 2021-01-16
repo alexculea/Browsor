@@ -1,11 +1,11 @@
 #[macro_use]
 extern crate simple_error;
 
-mod ui;
-mod os_util;
 mod error;
+mod os_util;
+mod ui;
 
-use::std::hash::{Hash, Hasher};
+use ::std::hash::{Hash, Hasher};
 use std::collections::hash_map::DefaultHasher;
 use winit::{
     event::{Event, WindowEvent},
@@ -19,7 +19,7 @@ use ui::{BrowserSelectorUI, UserInterface};
 fn main() {
     let cli_arg_open_url = {
         let arguments: Vec<String> = std::env::args().collect();
-        if arguments.len() < 2 { 
+        if arguments.len() < 2 {
             println!("No URL to open given. Set the first parameter the URL you'd like to invoke.");
             return;
         }
@@ -40,8 +40,16 @@ fn main() {
 
     let mut ui = BrowserSelectorUI::new().expect("Failed to initialize COM or WinUI");
     let event_loop = EventLoop::new();
-    let window = WindowBuilder::new().build(&event_loop).unwrap();
-    ui.create(&window).expect("Failed to initialize WinUI XAML.");
+    let window = WindowBuilder::new()
+        .with_title(format!(
+            "{} {}",
+            env!("CARGO_PKG_NAME"),
+            env!("CARGO_PKG_VERSION")
+        ))
+        .build(&event_loop)
+        .unwrap();
+    ui.create(&window)
+        .expect("Failed to initialize WinUI XAML.");
 
     let browsers: Vec<os_browsers::Browser> =
         os_browsers::read_system_browsers_sync().expect("Could not read browser list");
@@ -51,20 +59,26 @@ fn main() {
         .map(ui_list_item_from_browser)
         .rev()
         .collect();
-    
-    ui.set_list(&list_items).expect("Couldn't populate browsers in the UI.");
-    ui.set_url(cli_arg_open_url.as_str()).expect("Couldn't render URL in the UI.");
+
+    ui.set_list(&list_items)
+        .expect("Couldn't populate browsers in the UI.");
+    ui.set_url(cli_arg_open_url.as_str())
+        .expect("Couldn't render URL in the UI.");
     ui.on_list_item_selected(move |uuid| {
         if let Some(item) = list_items.iter().find(|item| item.uuid == uuid) {
-            os_browsers::open_url(&cli_arg_open_url, &item.state);
             std::process::Command::new(&item.state.exe_path)
                 .args(&[&cli_arg_open_url])
                 .spawn()
-                .expect(format!("Couldn't run browser program at {}", &item.state.exe_path).to_owned().as_str());
-            
+                .expect(
+                    format!("Couldn't run browser program at {}", &item.state.exe_path)
+                        .to_owned()
+                        .as_str(),
+                );
+
             std::process::exit(0);
         }
-    }).expect("Cannot set on click event handler.");
+    })
+    .expect("Cannot set on click event handler.");
 
     // to load the UI from a xaml file instead:
     // use winrt::ComInterface;
@@ -73,16 +87,13 @@ fn main() {
     // let xaml = fs::read_to_string("src\\main.xaml").expect("Cant read XAML file");
     // let ui_container = XamlReader::load(xaml).expect("Failed loading XAML").query::<UIElement>();
 
-
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Wait;
         match event {
             Event::WindowEvent {
                 event: WindowEvent::CloseRequested,
                 window_id,
-            } if window_id == window.id() => {
-                *control_flow = ControlFlow::Exit
-            }
+            } if window_id == window.id() => *control_flow = ControlFlow::Exit,
             Event::WindowEvent {
                 event: WindowEvent::Resized(_size),
                 ..
@@ -106,7 +117,7 @@ fn main() {
 fn ui_list_item_from_browser(browser: &os_browsers::Browser) -> ui::ListItem<os_browsers::Browser> {
     let image = BrowserSelectorUI::<os_browsers::Browser>::load_image(browser.exe_path.as_str())
         .unwrap_or_default();
-    
+
     let uuid = {
         let mut hasher = DefaultHasher::new();
         browser.exe_path.hash(&mut hasher);
@@ -116,13 +127,15 @@ fn ui_list_item_from_browser(browser: &os_browsers::Browser) -> ui::ListItem<os_
     ui::ListItem {
         title: browser.version.product_name.clone(),
         subtitle: vec![
-                browser.version.product_version.clone(),
-                browser.version.binary_type.to_string(),
-                browser.version.company_name.clone(),
-                browser.version.file_description.clone(),
-            ].into_iter()
-            .filter(|itm| itm.len() > 0).collect::<Vec<String>>()
-            .join(" | "),
+            browser.version.product_version.clone(),
+            browser.version.binary_type.to_string(),
+            browser.version.company_name.clone(),
+            browser.version.file_description.clone(),
+        ]
+        .into_iter()
+        .filter(|itm| itm.len() > 0)
+        .collect::<Vec<String>>()
+        .join(" | "),
         image,
         uuid,
         state: std::rc::Rc::new(browser.clone()),

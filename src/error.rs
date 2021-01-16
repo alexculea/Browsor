@@ -3,12 +3,14 @@ pub type BSResult<T> = std::result::Result<T, BSError>;
 
 #[derive(Debug)]
 pub struct BSError {
-    msg: String
+    msg: String,
 }
 
 impl BSError {
     pub fn new(msg: &str) -> BSError {
-        BSError { msg: String::from(msg) }
+        BSError {
+            msg: String::from(msg),
+        }
     }
 }
 
@@ -18,14 +20,9 @@ impl std::fmt::Display for BSError {
     }
 }
 
-
 impl From<winrt::Error> for BSError {
     fn from(err: winrt::Error) -> Self {
-        BSError::new(format!(
-            "[WinRT error] code: {} {}",
-            err.code().0,
-            err.message(),
-        ).as_str())
+        BSError::new(format!("[WinRT error] code: {} {}", err.code().0, err.message(),).as_str())
     }
 }
 
@@ -36,7 +33,7 @@ impl From<simple_error::SimpleError> for BSError {
 }
 
 impl From<&str> for BSError {
-  fn from(str: &str) -> Self {
-    BSError::new(str)
-  }
+    fn from(str: &str) -> Self {
+        BSError::new(str)
+    }
 }

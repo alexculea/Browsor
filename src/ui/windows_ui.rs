@@ -1,8 +1,7 @@
-
-use std::mem::MaybeUninit;
 use std::convert::TryInto;
+use std::mem::MaybeUninit;
 
-// For clarity purposes keep all WinRT imports under wrt:: 
+// For clarity purposes keep all WinRT imports under wrt::
 // winrt is a different crate dealing with types for calling the imported resources
 // TODO: Find a better name rather than `wrt` to avoid confusion btw `wrt` and `winrt`
 mod wrt {
@@ -10,78 +9,51 @@ mod wrt {
         DesktopWindowXamlSource, IDesktopWindowXamlSourceFactory, WindowsXamlManager,
     };
 
-    pub use bindings::windows::storage::streams::{
-        DataWriter, IDataWriterFactory, IBuffer,
-    };
+    pub use bindings::windows::storage::streams::{DataWriter, IBuffer, IDataWriterFactory};
 
-    pub use bindings::windows::foundation::{IReference, IStringable, PropertyValue, IPropertyValue, PropertyType};
-    pub use bindings::windows::ui::xaml::controls::{
-        Button, IButtonFactory, IListBoxFactory, IListViewFactory, IRelativePanelFactory, ItemClickEventHandler, ItemClickEventArgs,
-        IStackPanelFactory, ListBox, ListView, ListViewSelectionMode, RelativePanel, StackPanel,
-        ScrollViewer, ScrollMode, IScrollViewerStatics,
-        Orientation,
-        TextBlock,
-        Image,
-        Grid,
-        RowDefinition,
-        ColumnDefinition,
-        IGridFactory,
-        ItemsControl,
-        Panel
+    pub use bindings::windows::foundation::{
+        IPropertyValue, IReference, IStringable, PropertyType, PropertyValue,
     };
-    pub use bindings::windows::ui::xaml::{
-        RoutedEventHandler,
-        Thickness,
-        UIElement,        
-        GridUnitType,
-        GridLength,
-        FrameworkElement,
-        VerticalAlignment
+    pub use bindings::windows::graphics::imaging::{
+        BitmapAlphaMode, BitmapPixelFormat, ISoftwareBitmapFactory, SoftwareBitmap,
+    };
+    pub use bindings::windows::ui::xaml::controls::{
+        Button, ColumnDefinition, Grid, IButtonFactory, IGridFactory, IListBoxFactory,
+        IListViewFactory, IRelativePanelFactory, IScrollViewerStatics, IStackPanelFactory, Image,
+        ItemClickEventArgs, ItemClickEventHandler, ItemsControl, ListBox, ListView,
+        ListViewSelectionMode, Orientation, Panel, RelativePanel, RowDefinition, ScrollMode,
+        ScrollViewer, StackPanel, TextBlock,
     };
     pub use bindings::windows::ui::xaml::interop::{TypeKind, TypeName};
-    pub use bindings::windows::ui::xaml::media::imaging::{SoftwareBitmapSource, BitmapImage};
-    pub use bindings::windows::ui::xaml::media::{ImageSource};
-    pub use bindings::windows::graphics::imaging::{
-        SoftwareBitmap, ISoftwareBitmapFactory, BitmapPixelFormat, BitmapAlphaMode,
+    pub use bindings::windows::ui::xaml::media::imaging::{BitmapImage, SoftwareBitmapSource};
+    pub use bindings::windows::ui::xaml::media::ImageSource;
+    pub use bindings::windows::ui::xaml::{
+        FrameworkElement, GridLength, GridUnitType, RoutedEventHandler, Thickness, UIElement,
+        VerticalAlignment,
     };
 }
 
 mod winapi {
-    pub use winapi::shared::windef::{
-        HWND,
-        HICON,
-        HGDIOBJ
-    };
-    pub use winapi::um::winuser::{
-        GetIconInfo,
-        SetWindowPos,
-        UpdateWindow,
-        ICONINFO,
-    };
-    pub use winapi::um::wingdi::{
-        DeleteObject,
-        GetObjectW,
-        GetBitmapBits,
-        DIBSECTION,
-        BITMAP,
-    };
+    pub use winapi::shared::windef::{HGDIOBJ, HICON, HWND};
+    pub use winapi::um::wingdi::{DeleteObject, GetBitmapBits, GetObjectW, BITMAP, DIBSECTION};
+    pub use winapi::um::winuser::{GetIconInfo, SetWindowPos, UpdateWindow, ICONINFO};
 }
 
-use crate::ui::windows_desktop_window_xaml_source::IDesktopWindowXamlSourceNative;
-use crate::os_util::{get_hwnd, as_u8_slice};
 use crate::error::*;
+use crate::os_util::{as_u8_slice, get_hwnd};
+use crate::ui::windows_desktop_window_xaml_source::IDesktopWindowXamlSourceNative;
 
-use winit::window::Window;
 use winit::dpi::PhysicalSize;
+use winit::window::Window;
 use winrt::ComInterface;
 
-use crate::ui::UserInterface;
-use crate::ui::ListItem;
 use crate::ui::Image;
+use crate::ui::ListItem;
+use crate::ui::UserInterface;
 
 #[derive(Default)]
-pub struct BrowserSelectorUI<ItemStateType:Clone> {
-    state: UI<ItemStateType>
+pub struct BrowserSelectorUI<ItemStateType: Clone> {
+    state: UI<ItemStateType>,
 }
 
 pub struct XamlIslandWindow {
@@ -128,23 +100,22 @@ const LIST_CONTROL_NAME: &str = "browserList";
 const URL_CONTROL_NAME: &str = "urlControl";
 const HEADER_PANEL_NAME: &str = "headerPanel";
 
-
 impl<ItemStateType: Clone> UserInterface<ItemStateType> for BrowserSelectorUI<ItemStateType> {
     fn new() -> BSResult<Self> {
-       // TODO: Correct error handling
-       // unsafe { initialize_runtime_com()?; }
+        // TODO: Correct error handling
+        // unsafe { initialize_runtime_com()?; }
 
-       // Initialize WinUI XAML before creating the winit EventLoop
-       // or winit throws: thread 'main'
-       // panicked at 'either event handler is re-entrant (likely), or no event
-       // handler is registered (very unlikely)'
-       let state = UI {
-           xaml_isle: init_win_ui_xaml()?,
-           list: Vec::<ListItem<ItemStateType>>::new(),
-           container: wrt::Panel::default(),
-       };
+        // Initialize WinUI XAML before creating the winit EventLoop
+        // or winit throws: thread 'main'
+        // panicked at 'either event handler is re-entrant (likely), or no event
+        // handler is registered (very unlikely)'
+        let state = UI {
+            xaml_isle: init_win_ui_xaml()?,
+            list: Vec::<ListItem<ItemStateType>>::new(),
+            container: wrt::Panel::default(),
+        };
 
-       Ok(BrowserSelectorUI { state })
+        Ok(BrowserSelectorUI { state })
     }
 
     fn create(&mut self, window: &Window) -> BSResult<()> {
@@ -156,66 +127,74 @@ impl<ItemStateType: Clone> UserInterface<ItemStateType> for BrowserSelectorUI<It
         }
 
         let ui_container = create_ui(&self.state)?;
-        
-        self.state.xaml_isle.desktop_source.set_content(ui_container.to_owned())?;
+
+        self.state
+            .xaml_isle
+            .desktop_source
+            .set_content(ui_container.to_owned())?;
         self.state.container = ComInterface::query::<wrt::Panel>(&ui_container);
-        
 
         Ok(())
     }
 
     fn update_layout_size(&self, _: &Window, size: &PhysicalSize<u32>) -> BSResult<()> {
         update_xaml_island_size(&self.state.xaml_isle, *size)?;
-        
+
         Ok(())
     }
 
     fn set_list(&mut self, list: &[ListItem<ItemStateType>]) -> BSResult<()> {
-        if let Some(ui_element) = recursive_find_child_by_tag(&self.state.container, LIST_CONTROL_NAME)? {
+        if let Some(ui_element) =
+            recursive_find_child_by_tag(&self.state.container, LIST_CONTROL_NAME)?
+        {
             let listview = ComInterface::query::<wrt::ListView>(&ui_element);
             self.state.list = list.clone().to_vec();
             set_listview_items(&listview, list).unwrap();
         }
-        
+
         Ok(())
     }
 
     fn set_url(&self, new_url: &str) -> BSResult<()> {
-        if let Some(ui_element) = recursive_find_child_by_tag(&self.state.container, URL_CONTROL_NAME)? {
+        if let Some(ui_element) =
+            recursive_find_child_by_tag(&self.state.container, URL_CONTROL_NAME)?
+        {
             let text_block = ComInterface::query::<wrt::TextBlock>(&ui_element);
             text_block.set_text(new_url)?;
         }
-        
+
         Ok(())
     }
 
     fn load_image(path: &str) -> BSResult<Image> {
         let hicon = crate::os_util::get_exe_file_icon(path)?;
         let bmp = hicon_to_software_bitmap(hicon)?;
-        
+
         match software_bitmap_to_xaml_image(bmp) {
             Ok(image) => Ok(image),
-            Err(winrt_error) => Err(BSError::from(winrt_error))
+            Err(winrt_error) => Err(BSError::from(winrt_error)),
         }
     }
 
     fn select_list_item_by_index(&self, index: u32) -> BSResult<()> {
-        let list_control: wrt::ListView = recursive_find_child_by_tag(&self.state.container, LIST_CONTROL_NAME)
-            .unwrap()
-            .unwrap()
-            .query();
-        
+        let list_control: wrt::ListView =
+            recursive_find_child_by_tag(&self.state.container, LIST_CONTROL_NAME)
+                .unwrap()
+                .unwrap()
+                .query();
+
         list_control.set_selected_index(index as i32)?;
-        
+
         Ok(())
     }
 
     fn get_selected_list_item_index(&self) -> BSResult<i32> {
-        let list_control: wrt::ListView = recursive_find_child_by_tag(&self.state.container, LIST_CONTROL_NAME)
-            .unwrap()
-            .unwrap()
-            .query();
-    
+        let list_control: wrt::ListView =
+            recursive_find_child_by_tag(&self.state.container, LIST_CONTROL_NAME)
+                .unwrap()
+                .unwrap()
+                .query();
+
         Ok(list_control.selected_index()?)
     }
     fn get_selected_list_item(&self) -> BSResult<Option<ListItem<ItemStateType>>> {
@@ -224,22 +203,30 @@ impl<ItemStateType: Clone> UserInterface<ItemStateType> for BrowserSelectorUI<It
             return Ok(None);
         }
 
-        let cloned_item = self.state.list[selected_index as usize].clone();        
+        let cloned_item = self.state.list[selected_index as usize].clone();
         Ok(Some(cloned_item))
     }
 
-    fn on_list_item_selected(&self, mut event_handler: impl FnMut(&str) -> () + 'static) -> BSResult<()> {
-        let list_control: wrt::ListView = recursive_find_child_by_tag(&self.state.container, LIST_CONTROL_NAME)
-            .unwrap()
-            .unwrap()
-            .query();
+    fn on_list_item_selected(
+        &self,
+        mut event_handler: impl FnMut(&str) -> () + 'static,
+    ) -> BSResult<()> {
+        let list_control: wrt::ListView =
+            recursive_find_child_by_tag(&self.state.container, LIST_CONTROL_NAME)
+                .unwrap()
+                .unwrap()
+                .query();
         list_control.set_is_item_click_enabled(true)?;
-        list_control.item_click(wrt::ItemClickEventHandler::new(move |_: &winrt::Object, event: &wrt::ItemClickEventArgs| -> winrt::Result<()> {
-            let item_tag = ui_element_get_tag_as_string(&event.clicked_item()?).unwrap().unwrap();
-            event_handler(item_tag.as_str());
+        list_control.item_click(wrt::ItemClickEventHandler::new(
+            move |_: &winrt::Object, event: &wrt::ItemClickEventArgs| -> winrt::Result<()> {
+                let item_tag = ui_element_get_tag_as_string(&event.clicked_item()?)
+                    .unwrap()
+                    .unwrap();
+                event_handler(item_tag.as_str());
 
-            Ok(())
-        }))?;
+                Ok(())
+            },
+        ))?;
 
         Ok(())
     }
@@ -288,13 +275,19 @@ pub fn update_xaml_island_size(
     Ok(())
 }
 
-pub fn create_ui<T:Clone>(ui: &UI<T>) -> winrt::Result<wrt::UIElement> {
+pub fn create_ui<T: Clone>(ui: &UI<T>) -> winrt::Result<wrt::UIElement> {
     let header_panel = create_header("You are about to open:", "")?;
     let list = create_list(&ui.list)?;
     let grid = create_main_layout_grid()?;
 
-    wrt::Grid::set_row(ComInterface::query::<wrt::FrameworkElement>(&header_panel), 0)?;
-    wrt::Grid::set_column(ComInterface::query::<wrt::FrameworkElement>(&header_panel), 0)?;
+    wrt::Grid::set_row(
+        ComInterface::query::<wrt::FrameworkElement>(&header_panel),
+        0,
+    )?;
+    wrt::Grid::set_column(
+        ComInterface::query::<wrt::FrameworkElement>(&header_panel),
+        0,
+    )?;
     wrt::Grid::set_row(&ComInterface::query::<wrt::FrameworkElement>(&list), 1)?;
     wrt::Grid::set_column(ComInterface::query::<wrt::FrameworkElement>(&list), 0)?;
 
@@ -310,10 +303,7 @@ pub fn create_ui<T:Clone>(ui: &UI<T>) -> winrt::Result<wrt::UIElement> {
 /// and the bottom row has the list of browsers available.
 pub fn create_main_layout_grid() -> winrt::Result<wrt::Grid> {
     let grid = winrt::factory::<wrt::Grid, wrt::IGridFactory>()?
-    .create_instance(
-        winrt::Object::default(),
-        &mut winrt::Object::default(),
-    )?;
+        .create_instance(winrt::Object::default(), &mut winrt::Object::default())?;
     let column_definition = wrt::ColumnDefinition::new()?;
     let top_row_definition = wrt::RowDefinition::new()?;
     let bottom_row_definition = wrt::RowDefinition::new()?;
@@ -334,7 +324,12 @@ pub fn create_main_layout_grid() -> winrt::Result<wrt::Grid> {
     Ok(grid)
 }
 
-pub fn create_list_item(title: &str, subtext: &str, image: &wrt::Image, tag: &str) -> winrt::Result<wrt::UIElement> {
+pub fn create_list_item(
+    title: &str,
+    subtext: &str,
+    image: &wrt::Image,
+    tag: &str,
+) -> winrt::Result<wrt::UIElement> {
     let list_item_margins = wrt::Thickness {
         top: 0.,
         left: 15.,
@@ -354,9 +349,13 @@ pub fn create_list_item(title: &str, subtext: &str, image: &wrt::Image, tag: &st
     subtitle_block.set_text(subtext as &str)?;
 
     name_version_stack_panel.children()?.append(title_block)?;
-    name_version_stack_panel.children()?.append(subtitle_block)?;
+    name_version_stack_panel
+        .children()?
+        .append(subtitle_block)?;
     root_stack_panel.children()?.append(image)?;
-    root_stack_panel.children()?.append(name_version_stack_panel)?;
+    root_stack_panel
+        .children()?
+        .append(name_version_stack_panel)?;
     ui_element_set_string_tag(&root_stack_panel, tag).unwrap();
 
     Ok(root_stack_panel.into())
@@ -369,7 +368,7 @@ pub fn create_stack_panel() -> winrt::Result<wrt::StackPanel> {
     Ok(stack_panel)
 }
 
-pub fn create_list<T:Clone>(list: &Vec<ListItem<T>>) -> winrt::Result<wrt::UIElement> {
+pub fn create_list<T: Clone>(list: &Vec<ListItem<T>>) -> winrt::Result<wrt::UIElement> {
     let list_control = winrt::factory::<wrt::ListView, wrt::IListViewFactory>()?
         .create_instance(winrt::Object::default(), &mut winrt::Object::default())?;
     list_control.set_margin(wrt::Thickness {
@@ -383,24 +382,27 @@ pub fn create_list<T:Clone>(list: &Vec<ListItem<T>>) -> winrt::Result<wrt::UIEle
 
     set_listview_items(&list_control, list)?;
     list_control.set_selected_index(0)?;
-    
-    ui_element_set_string_tag(&list_control, LIST_CONTROL_NAME).unwrap(); 
+
+    ui_element_set_string_tag(&list_control, LIST_CONTROL_NAME).unwrap();
     // ^-- .unwrap() is not consistent with the rest of error handling
     // however this is extremly unlikely to occur so a panic is OK here
-    
+
     Ok(list_control.into())
 }
 
-pub fn set_listview_items<T:Clone>(list_control: &wrt::ListView, list: &[ListItem<T>]) -> winrt::Result<()> {
+pub fn set_listview_items<T: Clone>(
+    list_control: &wrt::ListView,
+    list: &[ListItem<T>],
+) -> winrt::Result<()> {
     for item in list {
-        list_control.items()?.append(winrt::Object::from(
-            create_list_item(
+        list_control
+            .items()?
+            .append(winrt::Object::from(create_list_item(
                 item.title.as_str(),
                 item.subtitle.as_str(),
                 &item.image,
                 item.uuid.as_str(),
-            )?
-        ))?;
+            )?))?;
     }
 
     Ok(())
@@ -419,27 +421,25 @@ pub fn create_header(open_action_text: &str, url: &str) -> winrt::Result<wrt::St
     stack_panel.set_tag(wrt::PropertyValue::create_string(HEADER_PANEL_NAME)?)?;
 
     stack_panel.children()?.append(call_to_action_top_row)?;
-    stack_panel.children()?.append(call_to_action_bottom_row)?;    
+    stack_panel.children()?.append(call_to_action_bottom_row)?;
 
     Ok(stack_panel)
 }
 
 /// From the given WinRT SoftwareBitmap it returns
 /// the corresponding WinUI Image XAML control that can be inserted
-/// as a node in any UIElement derived object 
+/// as a node in any UIElement derived object
 pub fn software_bitmap_to_xaml_image(bmp: wrt::SoftwareBitmap) -> winrt::Result<wrt::Image> {
     // ToDO: Can we achieve the same thing without this conversion?
-    // Background: ImageSource.SetBitmapAsync will throw an exception if 
+    // Background: ImageSource.SetBitmapAsync will throw an exception if
     // the bitmap set is not Pixel Format: BGRA8, BitmapAlphaMode: Premulitplied
     // Does it work setting these flags without any pixel conversion?
     let bgra8_bmp = match bmp.bitmap_pixel_format()? {
-        wrt::BitmapPixelFormat::Bgra8 => { 
-            wrt::SoftwareBitmap::convert_with_alpha(
-                bmp,
-                wrt::BitmapPixelFormat::Bgra8,
-                wrt::BitmapAlphaMode::Premultiplied
-            )?
-        },
+        wrt::BitmapPixelFormat::Bgra8 => wrt::SoftwareBitmap::convert_with_alpha(
+            bmp,
+            wrt::BitmapPixelFormat::Bgra8,
+            wrt::BitmapAlphaMode::Premultiplied,
+        )?,
         _ => bmp,
     };
 
@@ -470,14 +470,15 @@ pub fn hicon_to_software_bitmap(hicon: winapi::HICON) -> BSResult<wrt::SoftwareB
     let bitmap_struct_size = std::mem::size_of::<winapi::BITMAP>()
         .try_into()
         .unwrap_or(0);
-    
 
     let mut dib: winapi::DIBSECTION = unsafe { MaybeUninit::uninit().assume_init() };
-    let bytes_read = unsafe { winapi::GetObjectW(
-        icon_info.hbmColor as *mut _ as *mut std::ffi::c_void,
-        dib_struct_size,
-        &mut dib as *mut _ as *mut std::ffi::c_void
-    ) };
+    let bytes_read = unsafe {
+        winapi::GetObjectW(
+            icon_info.hbmColor as *mut _ as *mut std::ffi::c_void,
+            dib_struct_size,
+            &mut dib as *mut _ as *mut std::ffi::c_void,
+        )
+    };
 
     if bytes_read == 0 {
         unsafe {
@@ -490,8 +491,8 @@ pub fn hicon_to_software_bitmap(hicon: winapi::HICON) -> BSResult<wrt::SoftwareB
 
     // BITMAP size is 32 bytes
     // DIBSECTION is 104 bytes
-    let bmp_size_in_bytes 
-        = (dib.dsBm.bmHeight * dib.dsBm.bmWidth) * (dib.dsBm.bmBitsPixel as i32 / 8);
+    let bmp_size_in_bytes =
+        (dib.dsBm.bmHeight * dib.dsBm.bmWidth) * (dib.dsBm.bmBitsPixel as i32 / 8);
 
     let pixel_bytes_result = match bytes_read {
         bytes_read if bytes_read == bitmap_struct_size => {
@@ -500,72 +501,75 @@ pub fn hicon_to_software_bitmap(hicon: winapi::HICON) -> BSResult<wrt::SoftwareB
             let mut img_bytes = Vec::<u8>::new();
             img_bytes.resize(bmp_size_in_bytes as usize, 0);
 
-            let img_bytes_read = unsafe { 
+            let img_bytes_read = unsafe {
                 winapi::GetBitmapBits(
                     icon_info.hbmColor,
                     bmp_size_in_bytes,
-                    img_bytes.as_mut_slice().as_mut_ptr() as *mut std::ffi::c_void
+                    img_bytes.as_mut_slice().as_mut_ptr() as *mut std::ffi::c_void,
                 )
             };
             // TODO: Replace GetBitmapBits with GetDibBits because GetBitmapBits is deprecated
 
-            if img_bytes_read == 0 { 
-                Err("winapi::GetBitmapBits read 0 bytes from the ICONINFO.hbmColor") 
-            } else { 
-                Ok(img_bytes) 
+            if img_bytes_read == 0 {
+                Err("winapi::GetBitmapBits read 0 bytes from the ICONINFO.hbmColor")
+            } else {
+                Ok(img_bytes)
             }
-        },
+        }
         bytes_read if bytes_read == dib_struct_size => {
             if dib.dsBm.bmBits as usize != 0 {
-                Ok(unsafe { 
+                Ok(unsafe {
                     std::slice::from_raw_parts::<u8>(
                         dib.dsBm.bmBits as *const u8,
-                        bmp_size_in_bytes as usize
-                    ).to_vec()
+                        bmp_size_in_bytes as usize,
+                    )
+                    .to_vec()
                 })
             } else {
                 Err("Unexpected NULL pointer for image bits from DIBSECTION.dsBm.bmBits")
             }
-        },
+        }
         0 => Err("winapi::GetObject returned 0 on ICONINFO.hbmColor bitmap."),
         _ => Err(
             "Unexpected response from winapi::GetObject, was expecting read bytes \
-            to match either the BITMAP struct size or the DIBSECTION struct size."
+            to match either the BITMAP struct size or the DIBSECTION struct size.",
         ),
     };
 
     let pixel_bytes = match pixel_bytes_result {
         Ok(bytes) => bytes,
-        Err(error) => unsafe { 
+        Err(error) => unsafe {
             winapi::DeleteObject(icon_info.hbmColor as winapi::HGDIOBJ);
             winapi::DeleteObject(icon_info.hbmMask as winapi::HGDIOBJ);
             bail!(error);
-        }
+        },
     };
 
-    let raw_pixels = pixel_bytes.chunks_exact(4)
-        .map(|chunk| { 
+    let raw_pixels = pixel_bytes
+        .chunks_exact(4)
+        .map(|chunk| {
             u32::from_ne_bytes(
-                chunk.try_into().expect("Expected chunk size to be 4 bytes when converting to u32")
-            ) 
+                chunk
+                    .try_into()
+                    .expect("Expected chunk size to be 4 bytes when converting to u32"),
+            )
         })
         .collect::<Vec<u32>>();
 
     let data_writer = wrt::DataWriter::new()?;
     data_writer.write_bytes(as_u8_slice(&raw_pixels[..]))?;
-    
+
     let i_buffer = data_writer.detach_buffer()?;
     let software_bitmap = wrt::SoftwareBitmap::create_copy_with_alpha_from_buffer(
         i_buffer,
         wrt::BitmapPixelFormat::Bgra8,
-        dib.dsBm.bmWidth, 
+        dib.dsBm.bmWidth,
         dib.dsBm.bmHeight,
-        wrt::BitmapAlphaMode::Straight
+        wrt::BitmapAlphaMode::Straight,
     )?;
     // About the BitmapPixelFormat::Bgra8:
     // Hard coding pixel format to BGRA with 1 byte per color seems to work but it should be
     // detected since there are no guarantees the Windows API will always return this format
-
 
     unsafe {
         winapi::DeleteObject(icon_info.hbmColor as winapi::HGDIOBJ);
@@ -575,14 +579,16 @@ pub fn hicon_to_software_bitmap(hicon: winapi::HICON) -> BSResult<wrt::SoftwareB
     return Ok(software_bitmap);
 }
 
-
-fn recursive_find_child_by_tag(parent: &impl winrt::ComInterface, needle: &str) -> winrt::Result<Option<wrt::UIElement>> {
+fn recursive_find_child_by_tag(
+    parent: &impl winrt::ComInterface,
+    needle: &str,
+) -> winrt::Result<Option<wrt::UIElement>> {
     let items_control: wrt::Panel = parent.query();
     if items_control.is_null() {
         return Err(winrt::Error::new(
             winrt::ErrorCode(1),
             "Parent given could not be cast to WinUI Panel. Check the given control inherits from Panel."
-        ));        
+        ));
     }
 
     let _items_count = items_control.children()?.size()?;
@@ -593,7 +599,7 @@ fn recursive_find_child_by_tag(parent: &impl winrt::ComInterface, needle: &str) 
         let child_of_current = match recursive_find_child_by_tag(&current, needle) {
             Ok(Some(found_child)) => found_child, // matches when a children of 'current' has the tag string equal to 'needle'
             _ => wrt::UIElement::default(), // matches when either error or no item was found, also applies when 'current' is not
-            // a type of Control that inhertis from Panel (ie. the control does not have children)
+                                            // a type of Control that inhertis from Panel (ie. the control does not have children)
         };
 
         if !child_of_current.is_null() {
@@ -605,7 +611,7 @@ fn recursive_find_child_by_tag(parent: &impl winrt::ComInterface, needle: &str) 
             Ok(Some(string_value)) => string_value,
             _ => String::default(),
         };
-        
+
         if tag_value == needle {
             element_found = current;
             break;
@@ -616,7 +622,7 @@ fn recursive_find_child_by_tag(parent: &impl winrt::ComInterface, needle: &str) 
 
     match element_found.is_null() {
         true => Ok(None),
-        false => Ok(Some(element_found))
+        false => Ok(Some(element_found)),
     }
 }
 

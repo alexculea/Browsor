@@ -15,9 +15,3 @@ winreg = '0.8.0'
 
 [build-dependencies]
 embed-resource = "1.4.1"
-
-# [build-dependencies]
-#winrt =  { git = "https://github.com/microsoft/winrt-rs" }
-
-# [package.metadata.nuget_dependencies]
-# "Microsoft.UI.Xaml" = "2.4.2"

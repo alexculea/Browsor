@@ -2,10 +2,10 @@ use simple_error::SimpleResult as Result;
 mod winapi {
     pub use winapi::shared::minwindef::DWORD;
     pub use winapi::shared::windef::HICON;
-    pub use winapi::um::winbase::GetBinaryTypeW;
-    pub use winapi::um::winver::{GetFileVersionInfoSizeW, GetFileVersionInfoW, VerQueryValueW};
     pub use winapi::um::errhandlingapi::GetLastError;
+    pub use winapi::um::winbase::GetBinaryTypeW;
     pub use winapi::um::winnls::GetUserDefaultUILanguage;
+    pub use winapi::um::winver::{GetFileVersionInfoSizeW, GetFileVersionInfoW, VerQueryValueW};
 }
 
 #[derive(Debug, Clone)]
@@ -48,11 +48,15 @@ impl Default for BinaryType {
 
 impl std::fmt::Display for BinaryType {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}", match self {
-            BinaryType::Bits32 => "32 bits",
-            BinaryType::Bits64 => "64 bits",
-            _ => "",
-        })
+        write!(
+            f,
+            "{}",
+            match self {
+                BinaryType::Bits32 => "32 bits",
+                BinaryType::Bits64 => "64 bits",
+                _ => "",
+            }
+        )
     }
 }
 
@@ -60,8 +64,8 @@ impl std::fmt::Display for BinaryType {
 pub struct VersionInfo {
     pub company_name: String,
     pub file_description: String,
-    pub product_version:  String,
-    pub product_name:  String,
+    pub product_version: String,
+    pub product_name: String,
     pub binary_type: BinaryType,
 }
 
@@ -72,8 +76,9 @@ pub fn read_system_browsers_sync() -> Result<Vec<Browser>> {
     let mut list = [
         read_browsers_from_reg_path_sync(path32)?,
         read_browsers_from_reg_path_sync(path64)?,
-    ].concat();
-    
+    ]
+    .concat();
+
     // dedup below only compares current with next element
     // lists need to be sorted for dedup_by to work
     list.sort_unstable_by_key(|item| item.exe_path.clone());
@@ -148,22 +153,20 @@ fn read_browser_exe_info(path: &str) -> Result<VersionInfo> {
     Ok(ver_info)
 }
 
-/// For the given `path` it returns the architecture of the 
+/// For the given `path` it returns the architecture of the
 /// executable to be either 32 or 64 bits.
 fn read_exe_arch(path: &str) -> Result<BinaryType> {
     // WinAPI rust crate is missing the SCS_ constants thus
     // we need to define the values here
-    // https://github.com/retep998/winapi-rs/issues/930 
+    // https://github.com/retep998/winapi-rs/issues/930
     const NONE: u32 = 12345678; // 0 is already assigned to 32 bits by the WinAPI
     const WINAPI_BITS32: u32 = 0;
     const WINAPI_BITS64: u32 = 6;
-    
 
-    let file_path_wide = crate::os_util::str_to_wide(path);    
+    let file_path_wide = crate::os_util::str_to_wide(path);
     let mut bin_type: u32 = NONE;
-    let api_call_result = unsafe { 
-        winapi::GetBinaryTypeW(file_path_wide.as_ptr(), &mut bin_type as *mut u32)
-    };
+    let api_call_result =
+        unsafe { winapi::GetBinaryTypeW(file_path_wide.as_ptr(), &mut bin_type as *mut u32) };
 
     if api_call_result < 1 {
         bail!(
@@ -172,12 +175,11 @@ fn read_exe_arch(path: &str) -> Result<BinaryType> {
         );
     }
 
-
     Ok(match bin_type {
         WINAPI_BITS32 => BinaryType::Bits32,
         WINAPI_BITS64 => BinaryType::Bits64,
         _ => BinaryType::None,
-    })   
+    })
 }
 
 /// Reads file attributes specific to Windows executables as per the fields
@@ -198,7 +200,7 @@ fn read_exe_arch(path: &str) -> Result<BinaryType> {
 ///  - we ask the OS what is the OS setting for the user's language and we pick .exe language that matches the UI default or the language neutral entry which Windows defines it as a lang code of 0, or the first element found
 ///  - we ask the for specific values of the properties `ProductName`, `CompanyName`, `ProductVersion` and if they're not `UTF-16` we convert them based on the indicated `Code Page`.
 fn read_exe_version_info(path: &str) -> Result<VersionInfo> {
-    const UTF16_WINDOWS_CODE_PAGE: u16 = 1200; 
+    const UTF16_WINDOWS_CODE_PAGE: u16 = 1200;
     let file_path_wide = crate::os_util::str_to_wide(path);
     let file_version_size: u32 =
         unsafe { winapi::GetFileVersionInfoSizeW(file_path_wide.as_ptr(), &mut 0) };
@@ -229,16 +231,16 @@ fn read_exe_version_info(path: &str) -> Result<VersionInfo> {
         #[allow(non_snake_case)]
         struct LANGANDCODEPAGE {
             wLanguage: u16,
-            wCodePage: u16
+            wCodePage: u16,
         };
         type PCLANGANDCODEPAGE = *const LANGANDCODEPAGE;
 
         // pointer within `buffer` var above based on the sub block given to VerQueryValueW
         let mut out_pointer = std::ptr::null_mut();
-        
+
         // the number of bytes VerQueryValueW has written for the the requested sub block from within the `version_info_blob`
         let mut out_size: u32 = 0;
-        
+
         let translations_sub_block = crate::os_util::str_to_wide("\\VarFileInfo\\Translation");
 
         let result = winapi::VerQueryValueW(
@@ -250,17 +252,23 @@ fn read_exe_version_info(path: &str) -> Result<VersionInfo> {
 
         println!("Address of the verinfo buffer: {:p}", &version_info_blob);
         println!("Address of the VerQueryValue pointer: {:p}", out_pointer);
-        let raw_buff = std::slice::from_raw_parts::<u8>(out_pointer as *const u8, out_size as usize);
+        let raw_buff =
+            std::slice::from_raw_parts::<u8>(out_pointer as *const u8, out_size as usize);
         println!("Raw buffer:\n{:?}", raw_buff);
 
         if result == 0 || out_size == 0 || out_pointer == std::ptr::null_mut() {
-            bail!("Failed to read version info for {}. GetLastError: {:#x}", path, winapi::GetLastError());
+            bail!(
+                "Failed to read version info for {}. GetLastError: {:#x}",
+                path,
+                winapi::GetLastError()
+            );
         }
 
         let translations_len = out_size as usize / std::mem::size_of::<LANGANDCODEPAGE>();
-        
+
         // TODO: do we need to forget this because it's technically part of the version_info_blob?
-        let translations: &[LANGANDCODEPAGE] = std::slice::from_raw_parts(out_pointer as PCLANGANDCODEPAGE, translations_len);
+        let translations: &[LANGANDCODEPAGE] =
+            std::slice::from_raw_parts(out_pointer as PCLANGANDCODEPAGE, translations_len);
 
         let user_lang_id = winapi::GetUserDefaultUILanguage();
         let default_lang_id = 0; // 0 means language neutral
@@ -271,13 +279,17 @@ fn read_exe_version_info(path: &str) -> Result<VersionInfo> {
         let translation: &LANGANDCODEPAGE = translations
             .iter()
             .find(|item| item.wLanguage == user_lang_id)
-            .unwrap_or_else(|| translations
-                .iter()
-                .find(| item | item.wLanguage == default_lang_id)
-                .unwrap_or_else(|| &translations[0])
-            );
+            .unwrap_or_else(|| {
+                translations
+                    .iter()
+                    .find(|item| item.wLanguage == default_lang_id)
+                    .unwrap_or_else(|| &translations[0])
+            });
 
-        let base_block = format!("\\StringFileInfo\\{:04x}{:04x}", translation.wLanguage, translation.wCodePage);
+        let base_block = format!(
+            "\\StringFileInfo\\{:04x}{:04x}",
+            translation.wLanguage, translation.wCodePage
+        );
         let product_name_block = base_block.clone() + "\\ProductName";
         let company_name_block = base_block.clone() + "\\CompanyName";
         let product_version_block = base_block.clone() + "\\ProductVersion";
@@ -287,13 +299,15 @@ fn read_exe_version_info(path: &str) -> Result<VersionInfo> {
         for &block in [
             &product_name_block,
             &company_name_block,
-            &product_version_block
-        ].iter() {
+            &product_version_block,
+        ]
+        .iter()
+        {
             // pointer within `buffer` var above based on the sub block given to VerQueryValueW
             let mut out_pointer = std::ptr::null_mut();
-        
+
             // the number of bytes VerQueryValueW has written for the the requested sub block from within the `version_info_blob`
-            let mut out_size: u32 = 0;      
+            let mut out_size: u32 = 0;
             let result = winapi::VerQueryValueW(
                 version_info_blob.as_ptr() as *mut std::ffi::c_void,
                 crate::os_util::str_to_wide(block).as_ptr(),
@@ -309,33 +323,30 @@ fn read_exe_version_info(path: &str) -> Result<VersionInfo> {
             let raw_wide_string: Vec<u16>;
             if translation.wCodePage != UTF16_WINDOWS_CODE_PAGE {
                 // TODO: do we need to std::mem::forget this because it's technically part of the version_info_blob?
-                let raw_string = std::slice::from_raw_parts(out_pointer as *const i8, out_size as usize).to_vec();
-                raw_wide_string = crate::os_util::ansi_str_to_wide(&raw_string, translation.wCodePage)?;
+                let raw_string =
+                    std::slice::from_raw_parts(out_pointer as *const i8, out_size as usize)
+                        .to_vec();
+                raw_wide_string =
+                    crate::os_util::ansi_str_to_wide(&raw_string, translation.wCodePage)?;
             } else {
-                raw_wide_string = std::slice::from_raw_parts(out_pointer as *const u16, out_size as usize).to_vec();
+                raw_wide_string =
+                    std::slice::from_raw_parts(out_pointer as *const u16, out_size as usize)
+                        .to_vec();
             }
 
-            let result_str = crate::os_util::wide_to_str(&raw_wide_string);       
+            let result_str = crate::os_util::wide_to_str(&raw_wide_string);
             results.push(result_str);
         }
 
-        if let [
-            product_name, 
-            company_name,
-            product_version,
-        ] = results.as_slice() {
+        if let [product_name, company_name, product_version] = results.as_slice() {
             return Ok(VersionInfo {
                 product_name: product_name.into(),
                 product_version: product_version.into(),
                 company_name: company_name.into(),
                 ..Default::default()
-            })
+            });
         } else {
             bail!("Not all required props were found.");
         }
     }
-}
-
-pub fn open_url(url: &String, browser: &Browser) {
-    println!("URL Open requested with {:?}\nUrl: {}", browser, url);
 }

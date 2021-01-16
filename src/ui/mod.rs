@@ -1,8 +1,8 @@
 mod windows_ui;
 
-use winit::window::Window;
-use winit::dpi::PhysicalSize;
 use crate::error::BSResult;
+use winit::dpi::PhysicalSize;
+use winit::window::Window;
 
 use std::rc::Rc;
 
@@ -16,22 +16,24 @@ pub use windows_ui::BrowserSelectorUI;
 #[cfg(target_os = "windows")]
 mod windows_desktop_window_xaml_source;
 
-
 pub trait UserInterface<T: Clone> {
-  fn new() -> BSResult<BrowserSelectorUI<T>>;
-  fn create(&mut self, winit_wnd: &Window) -> BSResult<()>;
-  
-  fn set_list(&mut self, list: &[ListItem<T>]) -> BSResult<()>;
-  fn set_url(&self, url: &str) -> BSResult<()>;
+    fn new() -> BSResult<BrowserSelectorUI<T>>;
+    fn create(&mut self, winit_wnd: &Window) -> BSResult<()>;
 
-  fn update_layout_size(&self, window: &Window, size: &PhysicalSize<u32>) -> BSResult<()>;
-  fn load_image(path: &str) -> BSResult<Image>;
+    fn set_list(&mut self, list: &[ListItem<T>]) -> BSResult<()>;
+    fn set_url(&self, url: &str) -> BSResult<()>;
 
-  fn select_list_item_by_index(&self, index: u32) -> BSResult<()>;
-  fn get_selected_list_item_index(&self) -> BSResult<i32>;
-  fn get_selected_list_item(&self) -> BSResult<Option<ListItem<T>>>;
+    fn update_layout_size(&self, window: &Window, size: &PhysicalSize<u32>) -> BSResult<()>;
+    fn load_image(path: &str) -> BSResult<Image>;
 
-  fn on_list_item_selected(&self, event_handler: impl FnMut(&str) -> () + 'static) -> BSResult<()>;
+    fn select_list_item_by_index(&self, index: u32) -> BSResult<()>;
+    fn get_selected_list_item_index(&self) -> BSResult<i32>;
+    fn get_selected_list_item(&self) -> BSResult<Option<ListItem<T>>>;
+
+    fn on_list_item_selected(
+        &self,
+        event_handler: impl FnMut(&str) -> () + 'static,
+    ) -> BSResult<()>;
 }
 
 #[derive(Clone)]
