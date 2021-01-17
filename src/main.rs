@@ -110,8 +110,6 @@ fn main() {
             _ => (),
         }
     });
-
-    Ok(())
 }
 
 fn ui_list_item_from_browser(browser: &os_browsers::Browser) -> ui::ListItem<os_browsers::Browser> {
