@@ -149,7 +149,7 @@ impl<ItemStateType: Clone> UserInterface<ItemStateType> for BrowserSelectorUI<It
         {
             let listview = ComInterface::query::<wrt::ListView>(&ui_element);
             self.state.list = list.clone().to_vec();
-            set_listview_items(&listview, list).unwrap();
+            set_listview_items(&listview, list)?;
         }
 
         Ok(())

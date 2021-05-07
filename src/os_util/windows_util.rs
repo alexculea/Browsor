@@ -3,6 +3,7 @@ use simple_error::SimpleResult as Result;
 
 use crate::error::*;
 use winapi::um::stringapiset::MultiByteToWideChar;
+use winapi::um::winuser::MessageBoxW;
 
 // TODO: Do we really need this function?
 // use winapi::winrt::roapi::RoInitialize;
@@ -166,4 +167,10 @@ pub fn _get_create_config_directory(app_name: &str, env_name: &str) -> BSResult<
     }
 
     Ok(full_path_str)
+}
+
+pub fn output_panic_text(text: String) {
+    let wide_text = str_to_wide(&text);
+    let title = str_to_wide(&"Panic!");
+    unsafe { MessageBoxW(std::ptr::null_mut(),  wide_text.as_ptr(), title.as_ptr(), winapi::um::winuser::MB_OK); }
 }

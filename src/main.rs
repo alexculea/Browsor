@@ -6,7 +6,7 @@ mod os_util;
 mod ui;
 
 use ::std::hash::{Hash, Hasher};
-use std::collections::hash_map::DefaultHasher;
+use std::{collections::hash_map::DefaultHasher};
 use winit::{
     event::{Event, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
@@ -17,14 +17,18 @@ use crate::os_util::os_browsers;
 use ui::{BrowserSelectorUI, UserInterface};
 
 fn main() {
+    std::panic::set_hook(Box::new(|panic_info: &std::panic::PanicInfo| {
+        crate::os_util::output_panic_text(panic_info.to_string());
+        std::process::exit(1);
+    }));
+
     let cli_arg_open_url = {
         let arguments: Vec<String> = std::env::args().collect();
-        if arguments.len() < 2 {
-            println!("No URL to open given. Set the first parameter the URL you'd like to invoke.");
-            return;
+        if arguments.len() >= 2 {
+            arguments[1].to_owned() // arg[0] is executable path    
+        } else { 
+            String::new() 
         }
-
-        arguments[1].to_owned() // arg[0] is executable path
     };
 
     // let env_name = std::env::var("ENV").unwrap_or("production".to_string());
