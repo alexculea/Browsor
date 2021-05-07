@@ -70,8 +70,11 @@ fn main() {
         .expect("Couldn't render URL in the UI.");
     ui.on_list_item_selected(move |uuid| {
         if let Some(item) = list_items.iter().find(|item| item.uuid == uuid) {
+            let mut command_arguments = item.state.arguments.clone();
+            command_arguments.push(cli_arg_open_url.clone());
+
             std::process::Command::new(&item.state.exe_path)
-                .args(&[&cli_arg_open_url])
+                .args(command_arguments)
                 .spawn()
                 .expect(
                     format!("Couldn't run browser program at {}", &item.state.exe_path)

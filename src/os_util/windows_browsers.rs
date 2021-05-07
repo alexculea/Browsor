@@ -8,11 +8,25 @@ mod winapi {
     pub use winapi::um::winver::{GetFileVersionInfoSizeW, GetFileVersionInfoW, VerQueryValueW};
 }
 
+/// The `Browser` data structure is an entry mapped to the
+/// a browser program installed on the user's OS. What determines
+/// the list of present browser is platform specific.
 #[derive(Debug, Clone)]
 pub struct Browser {
+    // The path to the executable binary or script that is the entry point
+    // of the browser program. This path is absolute and free of arguments.
     pub exe_path: String,
+
+    // The arguments that should be passed when executing the browser binary
+    pub arguments: Vec<String>,
+
+    // User friendly browser program name, deducted from the executable metadata
+    // as defined by the program publisher
     pub name: String,
+
+    // Path to the browser program icon/logo
     pub icon: String,
+
     pub handle_icon: winapi::HICON,
     pub exe_exists: bool,
     pub icon_exists: bool,
@@ -23,12 +37,49 @@ impl Default for Browser {
     fn default() -> Browser {
         Browser {
             exe_path: String::default(),
+            arguments: Vec::default(),
             name: String::default(),
             version: VersionInfo::default(),
             icon: String::default(),
             exe_exists: false,
             icon_exists: false,
             handle_icon: std::ptr::null_mut(),
+        }
+    }
+}
+
+
+#[derive(Debug, Default)]
+struct WinExePath {
+    pub path_to_exe: String,
+    pub arguments: Vec<String>,
+}
+
+/// Windows paths can sometimes be formatted with arguments
+/// in the form of "C:\Path\To\Exe" --arg1 --arg2
+/// this method converts it into path string and arguments array
+impl From<&str> for WinExePath {
+    fn from(string_path: &str) -> Self {
+        // TODO: Support dobule quote escaped arguments "someArg"
+        if let [_, exe_path, args_part, ..] = *string_path.split('"').collect::<Vec<&str>>().as_slice() {
+            let arguments = match args_part.len() { 
+                len if len > 0 => args_part.trim().split(' ').collect::<Vec<&str>>(),
+                _ => Vec::default(),
+            };
+            let arguments_len = arguments.len();
+            
+            return WinExePath {
+                path_to_exe: String::from(exe_path),
+                arguments: arguments.into_iter().fold(Vec::with_capacity(arguments_len), |mut arg_list, arg| {
+                    arg_list.push(String::from(arg));
+                    arg_list
+                }),
+            };
+        }
+
+        WinExePath {
+            path_to_exe: String::from(string_path),
+            arguments: Vec::default(),
         }
     }
 }
@@ -85,6 +136,10 @@ pub fn read_system_browsers_sync() -> Result<Vec<Browser>> {
     list.dedup_by(|a, b| a.exe_path == b.exe_path);
 
     for browser in list.iter_mut() {
+        let path_and_args = WinExePath::from(browser.exe_path.as_str());
+        browser.exe_path = path_and_args.path_to_exe;
+        browser.arguments = path_and_args.arguments;
+
         match read_browser_exe_info(&browser.exe_path) {
             Ok(version) => browser.version = version,
             Err(e) => println!(
@@ -128,22 +183,14 @@ fn read_browser_info_from_reg_key(reg_path: &str) -> std::io::Result<Browser> {
 
     let browser_root_key =
         winreg::RegKey::predef(winreg::enums::HKEY_LOCAL_MACHINE).open_subkey(reg_path)?;
-
-    let browser_name: String = browser_root_key.get_value("")?; // empty gives us (Default)
-
     let shell_open_command_key = browser_root_key.open_subkey(shell_reg_path)?;
-    let mut exe_path: String = shell_open_command_key.get_value("")?;
-    exe_path = exe_path.replace("\"", "");
-
     let icon_key = browser_root_key.open_subkey(icon_reg_path)?;
+
+    let name: String = browser_root_key.get_value("")?; // empty gives us (Default)
+    let exe_path: String = shell_open_command_key.get_value("")?;
     let icon = icon_key.get_value("")?;
 
-    Ok(Browser {
-        name: browser_name,
-        exe_path: exe_path,
-        icon,
-        ..Browser::default()
-    })
+    Ok(Browser { name, exe_path, icon, ..Browser::default() })
 }
 
 fn read_browser_exe_info(path: &str) -> Result<VersionInfo> {
