@@ -8,9 +8,7 @@ pub struct BSError {
 
 impl BSError {
     pub fn new(msg: &str) -> BSError {
-        BSError {
-            msg: String::from(msg),
-        }
+        BSError { msg: String::from(msg) }
     }
 }
 
@@ -37,3 +35,20 @@ impl From<&str> for BSError {
         BSError::new(str)
     }
 }
+
+impl From<std::io::Error> for BSError {
+    fn from(error: std::io::Error) -> Self {
+        let os_code = error.raw_os_error().unwrap_or(0);
+        let error_message = format!("IO Error: Code ({}) - {}", os_code, error.to_string());
+        BSError::new(error_message.as_str())
+    }
+}
+
+// impl From<std::io::Result<T>> for BSResult<T> {
+//     fn from(result: std::io::Result<T>) -> Self {
+//         match result {
+//             Ok(t) => Ok(t),
+//             Err(e) => e.into()
+//         }
+//     }
+// }

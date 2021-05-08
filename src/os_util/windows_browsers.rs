@@ -1,4 +1,4 @@
-use simple_error::SimpleResult as Result;
+use crate::error::BSResult as Result;
 mod winapi {
     pub use winapi::shared::minwindef::DWORD;
     pub use winapi::shared::windef::HICON;
@@ -61,6 +61,8 @@ struct WinExePath {
 impl From<&str> for WinExePath {
     fn from(string_path: &str) -> Self {
         // TODO: Support dobule quote escaped arguments "someArg"
+        // TODO: Use WinAPI to do this instead using this:
+        // https://docs.microsoft.com/en-us/windows/win32/api/shellapi/nf-shellapi-shevaluatesystemcommandtemplate
         if let [_, exe_path, args_part, ..] = *string_path.split('"').collect::<Vec<&str>>().as_slice() {
             let arguments = match args_part.len() { 
                 len if len > 0 => args_part.trim().split(' ').collect::<Vec<&str>>(),
