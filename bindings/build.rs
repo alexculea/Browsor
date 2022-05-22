@@ -41,6 +41,8 @@ winrt::build!(
       windows::graphics::imaging::{
         SoftwareBitmap, ISoftwareBitmapFactory, BitmapPixelFormat, BitmapAlphaMode
       }
+      windows::ui::Colors
+      windows::ui::view_management::{UISettings}
 );
 
 fn main() {

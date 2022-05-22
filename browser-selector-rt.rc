@@ -1,5 +1,6 @@
 #define RT_MANIFEST 24
 1 RT_MANIFEST "browser-selector-rt.exe.manifest"
+1 ICON "assets\icon.ico"
 
 #define IDR_MAIN_XAML 101
 #define MAIN_XAML 256

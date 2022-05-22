@@ -281,7 +281,7 @@ fn read_exe_version_info(path: &str) -> Result<VersionInfo> {
         struct LANGANDCODEPAGE {
             wLanguage: u16,
             wCodePage: u16,
-        };
+        }
         type PCLANGANDCODEPAGE = *const LANGANDCODEPAGE;
 
         // pointer within `buffer` var above based on the sub block given to VerQueryValueW
