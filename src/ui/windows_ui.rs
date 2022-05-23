@@ -34,9 +34,11 @@ mod wrt {
 }
 
 mod winapi {
-    pub use winapi::shared::windef::{HGDIOBJ, HICON, HWND};
+    pub use winapi::shared::windef::{HGDIOBJ, HICON, HWND, POINT};
     pub use winapi::um::wingdi::{DeleteObject, GetBitmapBits, GetObjectW, BITMAP, DIBSECTION};
-    pub use winapi::um::winuser::{GetIconInfo, SetWindowPos, UpdateWindow, ICONINFO};
+    pub use winapi::um::winuser::{
+        GetCursorPos, GetIconInfo, SetWindowPos, UpdateWindow, ICONINFO, MONITORINFO,
+    };
 }
 
 use crate::error::*;
@@ -133,6 +135,8 @@ impl<ItemStateType: Clone> UserInterface<ItemStateType> for BrowserSelectorUI<It
             .desktop_source
             .set_content(ui_container.to_owned())?;
         self.state.container = ComInterface::query::<wrt::Panel>(&ui_container);
+
+        center_window_on_cursor_monitor(window)?;
 
         Ok(())
     }
@@ -577,6 +581,50 @@ pub fn hicon_to_software_bitmap(hicon: winapi::HICON) -> BSResult<wrt::SoftwareB
     }
 
     return Ok(software_bitmap);
+}
+
+/// Centers the given [`Window`] on the monitor where the mouse cursor is found.
+fn center_window_on_cursor_monitor(window: &Window) -> winrt::Result<()> {
+  let cursor_pos = unsafe {
+      let mut point: winapi::POINT = Default::default();
+      winapi::GetCursorPos(std::ptr::addr_of_mut!(point));
+      point
+  };
+  let current_monitor = window
+      .available_monitors()
+      .find(move |monitor| {
+          let pos = monitor.position();
+          let size = monitor.size();
+
+          let is_below_top = cursor_pos.x >= pos.x && cursor_pos.y >= pos.y;
+          let is_above_bottom = cursor_pos.x <= pos.x + size.width as i32
+              && cursor_pos.y <= pos.y + size.height as i32;
+          let is_within_monitor = is_below_top && is_above_bottom;
+
+          is_within_monitor
+      })
+      .ok_or(winrt::Error::new(
+          winrt::ErrorCode(1),
+          "Could not determine monitor from the current cursor",
+      ))?;
+
+  let monitor_size = current_monitor.size();
+  let monitor_pos = current_monitor.position();
+  let window_size = window.outer_size();
+
+  let window_center_x = (window_size.width / 2) as i32;
+  let window_center_y = (window_size.height / 2) as i32;
+  let monitor_center_x = (monitor_pos.x + (monitor_size.width as i32)) / 2;
+  let monitor_center_y = (monitor_pos.y + (monitor_size.height as i32)) / 2;
+  let window_x = monitor_center_x - window_center_x;
+  let window_y = monitor_center_y - window_center_y;
+  
+  window.set_outer_position(winit::dpi::PhysicalPosition { 
+    x: window_x,
+    y: window_y,
+  });
+
+  Ok(())
 }
 
 fn recursive_find_child_by_tag(
