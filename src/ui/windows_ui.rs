@@ -17,6 +17,7 @@ mod wrt {
     pub use bindings::windows::graphics::imaging::{
         BitmapAlphaMode, BitmapPixelFormat, ISoftwareBitmapFactory, SoftwareBitmap,
     };
+    pub use bindings::windows::ui::view_management::{UIColorType, UISettings};
     pub use bindings::windows::ui::xaml::controls::{
         Button, ColumnDefinition, Grid, IButtonFactory, IGridFactory, IListBoxFactory,
         IListViewFactory, IRelativePanelFactory, IScrollViewerStatics, IStackPanelFactory, Image,
@@ -26,11 +27,12 @@ mod wrt {
     };
     pub use bindings::windows::ui::xaml::interop::{TypeKind, TypeName};
     pub use bindings::windows::ui::xaml::media::imaging::{BitmapImage, SoftwareBitmapSource};
-    pub use bindings::windows::ui::xaml::media::ImageSource;
+    pub use bindings::windows::ui::xaml::media::{ImageSource, SolidColorBrush};
     pub use bindings::windows::ui::xaml::{
         FrameworkElement, GridLength, GridUnitType, RoutedEventHandler, Thickness, UIElement,
         VerticalAlignment,
     };
+    pub use bindings::windows::ui::Color;
 }
 
 mod winapi {
@@ -46,6 +48,7 @@ use crate::os_util::{as_u8_slice, get_hwnd};
 use crate::ui::windows_desktop_window_xaml_source::IDesktopWindowXamlSourceNative;
 
 use winit::dpi::PhysicalSize;
+use winit::platform::windows::IconExtWindows;
 use winit::window::Window;
 use winrt::ComInterface;
 
@@ -92,10 +95,20 @@ impl Default for XamlIslandWindow {
 }
 
 #[derive(Default)]
+pub struct Theme {
+    white: wrt::Color,
+    black: wrt::Color,
+    light_gray: wrt::Color,
+    dark_gray: wrt::Color,
+    accent: wrt::Color,
+}
+
+#[derive(Default)]
 pub struct UI<T: Clone> {
     pub xaml_isle: XamlIslandWindow,
     pub list: Vec<crate::ui::ListItem<T>>,
     pub container: wrt::Panel,
+    pub theme: Theme,
 }
 
 const LIST_CONTROL_NAME: &str = "browserList";
@@ -115,6 +128,7 @@ impl<ItemStateType: Clone> UserInterface<ItemStateType> for BrowserSelectorUI<It
             xaml_isle: init_win_ui_xaml()?,
             list: Vec::<ListItem<ItemStateType>>::new(),
             container: wrt::Panel::default(),
+            theme: create_theme()?,
         };
 
         Ok(BrowserSelectorUI { state })
@@ -128,7 +142,7 @@ impl<ItemStateType: Clone> UserInterface<ItemStateType> for BrowserSelectorUI<It
             winapi::UpdateWindow(self.state.xaml_isle.hwnd_parent as winapi::HWND);
         }
 
-        let ui_container = create_ui(&self.state)?;
+        let ui_container = create_ui(&self.state, &self.state.theme)?;
 
         self.state
             .xaml_isle
@@ -137,6 +151,10 @@ impl<ItemStateType: Clone> UserInterface<ItemStateType> for BrowserSelectorUI<It
         self.state.container = ComInterface::query::<wrt::Panel>(&ui_container);
 
         center_window_on_cursor_monitor(window)?;
+        window.set_window_icon(Some(winit::window::Icon::from_resource(
+          1,
+          Some(winit::dpi::PhysicalSize { width: 16 as u32, height: 16 as u32 }),
+        ).unwrap()));
 
         Ok(())
     }
@@ -153,7 +171,7 @@ impl<ItemStateType: Clone> UserInterface<ItemStateType> for BrowserSelectorUI<It
         {
             let listview = ComInterface::query::<wrt::ListView>(&ui_element);
             self.state.list = list.clone().to_vec();
-            set_listview_items(&listview, list)?;
+            set_listview_items(&listview, list, &self.state.theme)?;
         }
 
         Ok(())
@@ -279,10 +297,10 @@ pub fn update_xaml_island_size(
     Ok(())
 }
 
-pub fn create_ui<T: Clone>(ui: &UI<T>) -> winrt::Result<wrt::UIElement> {
-    let header_panel = create_header("You are about to open:", "")?;
-    let list = create_list(&ui.list)?;
-    let grid = create_main_layout_grid()?;
+pub fn create_ui<T: Clone>(ui: &UI<T>, theme: &Theme) -> winrt::Result<wrt::UIElement> {
+    let header_panel = create_header("You are about to open:", "", &theme)?;
+    let list = create_list(&ui.list, &theme)?;
+    let grid = create_main_layout_grid(&theme)?;
 
     wrt::Grid::set_row(
         ComInterface::query::<wrt::FrameworkElement>(&header_panel),
@@ -305,12 +323,13 @@ pub fn create_ui<T: Clone>(ui: &UI<T>) -> winrt::Result<wrt::UIElement> {
 /// fit to be used for presentation in the main window where the top
 /// row has the action intro text (ie. "You are about to open x URL")
 /// and the bottom row has the list of browsers available.
-pub fn create_main_layout_grid() -> winrt::Result<wrt::Grid> {
+pub fn create_main_layout_grid(theme: &Theme) -> winrt::Result<wrt::Grid> {
     let grid = winrt::factory::<wrt::Grid, wrt::IGridFactory>()?
         .create_instance(winrt::Object::default(), &mut winrt::Object::default())?;
     let column_definition = wrt::ColumnDefinition::new()?;
     let top_row_definition = wrt::RowDefinition::new()?;
     let bottom_row_definition = wrt::RowDefinition::new()?;
+
     top_row_definition.set_height(wrt::GridLength {
         value: 1.0,
         grid_unit_type: wrt::GridUnitType::Auto,
@@ -318,14 +337,48 @@ pub fn create_main_layout_grid() -> winrt::Result<wrt::Grid> {
     grid.row_definitions()?.append(top_row_definition)?;
     grid.row_definitions()?.append(bottom_row_definition)?;
     grid.column_definitions()?.append(column_definition)?;
-    grid.set_margin(wrt::Thickness {
-        top: 15.,
-        left: 15.,
-        right: 15.,
-        bottom: 15.,
-    })?;
+    grid.set_background(create_color_brush(theme.white.clone())?)?;
 
     Ok(grid)
+}
+
+fn create_theme() -> winrt::Result<Theme> {
+    let ui_settings = wrt::UISettings::new()?;
+    let os_foreground = ui_settings.get_color_value(wrt::UIColorType::Foreground)?;
+    let os_background = ui_settings.get_color_value(wrt::UIColorType::Background)?;
+    let os_accent = ui_settings.get_color_value(wrt::UIColorType::Accent)?;
+    let is_os_dark_mode = is_light_color(&os_foreground);
+
+    let mut light_gray = os_foreground.clone();
+    let mut dark_gray = os_foreground.clone();
+    let white = os_background;
+    let black = os_foreground;
+    if is_os_dark_mode {
+        light_gray.a = 20;
+        dark_gray.a = 140;
+    } else {
+        light_gray.a = 20;
+        dark_gray.a = 200;
+    };
+
+    Ok(Theme {
+        white,
+        black,
+        light_gray,
+        dark_gray,
+        accent: os_accent,
+    })
+}
+
+fn create_color_brush(color: wrt::Color) -> winrt::Result<wrt::SolidColorBrush> {
+    let brush = wrt::SolidColorBrush::new()?;
+    brush.set_color(color)?;
+
+    Ok(brush)
+}
+
+fn is_light_color(color: &wrt::Color) -> bool {
+    ((5 * (color.g as u32)) + (2 * (color.r as u32)) + (color.b as u32)) as u32 > ((8 * 128) as u32)
 }
 
 pub fn create_list_item(
@@ -333,12 +386,13 @@ pub fn create_list_item(
     subtext: &str,
     image: &wrt::Image,
     tag: &str,
+    theme: &Theme,
 ) -> winrt::Result<wrt::UIElement> {
     let list_item_margins = wrt::Thickness {
-        top: 0.,
+        top: 5.,
         left: 15.,
-        right: 0.,
-        bottom: 0.,
+        right: 15.,
+        bottom: 5.,
     };
     let root_stack_panel = create_stack_panel()?;
     root_stack_panel.set_orientation(wrt::Orientation::Horizontal)?;
@@ -351,6 +405,7 @@ pub fn create_list_item(
 
     let subtitle_block = wrt::TextBlock::new()?;
     subtitle_block.set_text(subtext as &str)?;
+    subtitle_block.set_foreground(create_color_brush(theme.dark_gray.clone())?)?;
 
     name_version_stack_panel.children()?.append(title_block)?;
     name_version_stack_panel
@@ -372,7 +427,10 @@ pub fn create_stack_panel() -> winrt::Result<wrt::StackPanel> {
     Ok(stack_panel)
 }
 
-pub fn create_list<T: Clone>(list: &Vec<ListItem<T>>) -> winrt::Result<wrt::UIElement> {
+pub fn create_list<T: Clone>(
+    list: &Vec<ListItem<T>>,
+    theme: &Theme,
+) -> winrt::Result<wrt::UIElement> {
     let list_control = winrt::factory::<wrt::ListView, wrt::IListViewFactory>()?
         .create_instance(winrt::Object::default(), &mut winrt::Object::default())?;
     list_control.set_margin(wrt::Thickness {
@@ -383,8 +441,9 @@ pub fn create_list<T: Clone>(list: &Vec<ListItem<T>>) -> winrt::Result<wrt::UIEl
     })?;
     list_control.set_selection_mode(wrt::ListViewSelectionMode::Single)?;
     list_control.set_vertical_alignment(wrt::VerticalAlignment::Stretch)?;
+    list_control.set_background(create_color_brush(theme.light_gray.clone())?)?;
 
-    set_listview_items(&list_control, list)?;
+    set_listview_items(&list_control, list, theme)?;
     list_control.set_selected_index(0)?;
 
     ui_element_set_string_tag(&list_control, LIST_CONTROL_NAME).unwrap();
@@ -397,6 +456,7 @@ pub fn create_list<T: Clone>(list: &Vec<ListItem<T>>) -> winrt::Result<wrt::UIEl
 pub fn set_listview_items<T: Clone>(
     list_control: &wrt::ListView,
     list: &[ListItem<T>],
+    theme: &Theme,
 ) -> winrt::Result<()> {
     for item in list {
         list_control
@@ -406,19 +466,25 @@ pub fn set_listview_items<T: Clone>(
                 item.subtitle.as_str(),
                 &item.image,
                 item.uuid.as_str(),
+                &theme,
             )?))?;
     }
 
     Ok(())
 }
 
-pub fn create_header(open_action_text: &str, url: &str) -> winrt::Result<wrt::StackPanel> {
+pub fn create_header(
+    open_action_text: &str,
+    url: &str,
+    theme: &Theme,
+) -> winrt::Result<wrt::StackPanel> {
     let stack_panel = winrt::factory::<wrt::StackPanel, wrt::IStackPanelFactory>()?
         .create_instance(winrt::Object::default(), &mut winrt::Object::default())?;
     let call_to_action_top_row = wrt::TextBlock::new()?;
     let call_to_action_bottom_row = wrt::TextBlock::new()?;
 
     call_to_action_top_row.set_text(open_action_text)?;
+    call_to_action_bottom_row.set_foreground(create_color_brush(theme.accent.clone())?)?;
     call_to_action_bottom_row.set_text(url)?;
 
     call_to_action_bottom_row.set_tag(wrt::PropertyValue::create_string(URL_CONTROL_NAME)?)?;
@@ -426,6 +492,12 @@ pub fn create_header(open_action_text: &str, url: &str) -> winrt::Result<wrt::St
 
     stack_panel.children()?.append(call_to_action_top_row)?;
     stack_panel.children()?.append(call_to_action_bottom_row)?;
+    stack_panel.set_margin(wrt::Thickness {
+        left: 15.0,
+        right: 15.0,
+        top: 15.0,
+        bottom: 0.0,
+    })?;
 
     Ok(stack_panel)
 }

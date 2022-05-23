@@ -47,8 +47,13 @@ fn main() {
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new()
         .with_title(format!("{} {}", app_name, app_version))
+        .with_decorations(true)
+        .with_always_on_top(true)
+        .with_inner_size(winit::dpi::LogicalSize { height: 400, width: 400 })
+        .with_resizable(false)
+        .with_visible(false)
         .build(&event_loop)
-        .unwrap();
+        .expect("Failed to create the main window");
     ui.create(&window)
         .expect("Failed to initialize WinUI XAML.");
 
@@ -90,14 +95,19 @@ fn main() {
     // use bindings::windows::ui::xaml::UIElement;
     // let xaml = fs::read_to_string("src\\main.xaml").expect("Cant read XAML file");
     // let ui_container = XamlReader::load(xaml).expect("Failed loading XAML").query::<UIElement>();
-
+    window.set_visible(true);
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Wait;
         match event {
+            // TODO: This is the documented way to exit as per winit, however this crashes
+            // Event::WindowEvent {
+            //     event: WindowEvent::CloseRequested,
+            //     window_id,
+            // } if window_id == window.id() => *control_flow = ControlFlow::Exit,
             Event::WindowEvent {
                 event: WindowEvent::CloseRequested,
                 window_id,
-            } if window_id == window.id() => *control_flow = ControlFlow::Exit,
+            } if window_id == window.id() => { std::process::exit(0); },
             Event::WindowEvent {
                 event: WindowEvent::Resized(_size),
                 ..
