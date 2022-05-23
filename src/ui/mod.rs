@@ -26,9 +26,10 @@ pub trait UserInterface<T: Clone> {
     fn update_layout_size(&self, window: &Window, size: &PhysicalSize<u32>) -> BSResult<()>;
     fn load_image(path: &str) -> BSResult<Image>;
 
-    fn select_list_item_by_index(&self, index: u32) -> BSResult<()>;
-    fn get_selected_list_item_index(&self) -> BSResult<i32>;
+    fn select_list_item_by_index(&self, index: isize) -> BSResult<()>;
+    fn get_selected_list_item_index(&self) -> BSResult<isize>;
     fn get_selected_list_item(&self) -> BSResult<Option<ListItem<T>>>;
+    fn get_list_length(&self) -> BSResult<usize>;
 
     fn on_list_item_selected(
         &self,

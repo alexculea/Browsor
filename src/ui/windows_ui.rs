@@ -1,5 +1,6 @@
 use std::convert::TryInto;
 use std::mem::MaybeUninit;
+use std::rc::Rc;
 
 // For clarity purposes keep all WinRT imports under wrt::
 // winrt is a different crate dealing with types for calling the imported resources
@@ -56,9 +57,8 @@ use crate::ui::Image;
 use crate::ui::ListItem;
 use crate::ui::UserInterface;
 
-#[derive(Default)]
 pub struct BrowserSelectorUI<ItemStateType: Clone> {
-    state: UI<ItemStateType>,
+    state: UIState<ItemStateType>,
 }
 
 pub struct XamlIslandWindow {
@@ -103,8 +103,7 @@ pub struct Theme {
     accent: wrt::Color,
 }
 
-#[derive(Default)]
-pub struct UI<T: Clone> {
+pub struct UIState<T: Clone> {
     pub xaml_isle: XamlIslandWindow,
     pub list: Vec<crate::ui::ListItem<T>>,
     pub container: wrt::Panel,
@@ -124,7 +123,7 @@ impl<ItemStateType: Clone> UserInterface<ItemStateType> for BrowserSelectorUI<It
         // or winit throws: thread 'main'
         // panicked at 'either event handler is re-entrant (likely), or no event
         // handler is registered (very unlikely)'
-        let state = UI {
+        let state = UIState {
             xaml_isle: init_win_ui_xaml()?,
             list: Vec::<ListItem<ItemStateType>>::new(),
             container: wrt::Panel::default(),
@@ -198,7 +197,7 @@ impl<ItemStateType: Clone> UserInterface<ItemStateType> for BrowserSelectorUI<It
         }
     }
 
-    fn select_list_item_by_index(&self, index: u32) -> BSResult<()> {
+    fn select_list_item_by_index(&self, index: isize) -> BSResult<()> {
         let list_control: wrt::ListView =
             recursive_find_child_by_tag(&self.state.container, LIST_CONTROL_NAME)
                 .unwrap()
@@ -210,14 +209,14 @@ impl<ItemStateType: Clone> UserInterface<ItemStateType> for BrowserSelectorUI<It
         Ok(())
     }
 
-    fn get_selected_list_item_index(&self) -> BSResult<i32> {
+    fn get_selected_list_item_index(&self) -> BSResult<isize> {
         let list_control: wrt::ListView =
             recursive_find_child_by_tag(&self.state.container, LIST_CONTROL_NAME)
                 .unwrap()
                 .unwrap()
                 .query();
 
-        Ok(list_control.selected_index()?)
+        Ok(list_control.selected_index()? as isize)
     }
     fn get_selected_list_item(&self) -> BSResult<Option<ListItem<ItemStateType>>> {
         let selected_index = self.get_selected_list_item_index()?;
@@ -244,13 +243,17 @@ impl<ItemStateType: Clone> UserInterface<ItemStateType> for BrowserSelectorUI<It
                 let item_tag = ui_element_get_tag_as_string(&event.clicked_item()?)
                     .unwrap()
                     .unwrap();
-                event_handler(item_tag.as_str());
+                (event_handler)(item_tag.as_str());
 
                 Ok(())
             },
         ))?;
 
         Ok(())
+    }
+
+    fn get_list_length(&self) -> BSResult<usize> {
+        Ok(self.state.list.len())
     }
 }
 
@@ -297,7 +300,7 @@ pub fn update_xaml_island_size(
     Ok(())
 }
 
-pub fn create_ui<T: Clone>(ui: &UI<T>, theme: &Theme) -> winrt::Result<wrt::UIElement> {
+pub fn create_ui<T: Clone>(ui: &UIState<T>, theme: &Theme) -> winrt::Result<wrt::UIElement> {
     let header_panel = create_header("You are about to open:", "", &theme)?;
     let list = create_list(&ui.list, &theme)?;
     let grid = create_main_layout_grid(&theme)?;
