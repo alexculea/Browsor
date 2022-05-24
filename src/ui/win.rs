@@ -1,6 +1,5 @@
 use std::convert::TryInto;
 use std::mem::MaybeUninit;
-use std::rc::Rc;
 
 // For clarity purposes keep all WinRT imports under wrt::
 // winrt is a different crate dealing with types for calling the imported resources
@@ -42,10 +41,11 @@ mod winapi {
     pub use winapi::um::winuser::{
         GetCursorPos, GetIconInfo, SetWindowPos, UpdateWindow, ICONINFO, MONITORINFO,
     };
+    pub use winapi::ctypes::*;
 }
 
 use crate::error::*;
-use crate::os_util::{as_u8_slice, get_hwnd};
+use crate::os::{as_u8_slice, get_hwnd};
 use crate::ui::windows_desktop_window_xaml_source::IDesktopWindowXamlSourceNative;
 
 use winit::dpi::PhysicalSize;
@@ -97,6 +97,7 @@ impl Default for XamlIslandWindow {
 #[derive(Default)]
 pub struct Theme {
     white: wrt::Color,
+    #[allow(dead_code)]
     black: wrt::Color,
     light_gray: wrt::Color,
     dark_gray: wrt::Color,
@@ -188,7 +189,7 @@ impl<ItemStateType: Clone> UserInterface<ItemStateType> for BrowserSelectorUI<It
     }
 
     fn load_image(path: &str) -> BSResult<Image> {
-        let hicon = crate::os_util::get_exe_file_icon(path)?;
+        let hicon = crate::os::get_exe_file_icon(path)?;
         let bmp = hicon_to_software_bitmap(hicon)?;
 
         match software_bitmap_to_xaml_image(bmp) {
@@ -553,9 +554,9 @@ pub fn hicon_to_software_bitmap(hicon: winapi::HICON) -> BSResult<wrt::SoftwareB
     let mut dib: winapi::DIBSECTION = unsafe { MaybeUninit::uninit().assume_init() };
     let bytes_read = unsafe {
         winapi::GetObjectW(
-            icon_info.hbmColor as *mut _ as *mut std::ffi::c_void,
+            icon_info.hbmColor as *mut _ as *mut winapi::c_void,
             dib_struct_size,
-            &mut dib as *mut _ as *mut std::ffi::c_void,
+            &mut dib as *mut _ as *mut winapi::c_void,
         )
     };
 
@@ -584,7 +585,7 @@ pub fn hicon_to_software_bitmap(hicon: winapi::HICON) -> BSResult<wrt::SoftwareB
                 winapi::GetBitmapBits(
                     icon_info.hbmColor,
                     bmp_size_in_bytes,
-                    img_bytes.as_mut_slice().as_mut_ptr() as *mut std::ffi::c_void,
+                    img_bytes.as_mut_slice().as_mut_ptr() as *mut winapi::c_void,
                 )
             };
             // TODO: Replace GetBitmapBits with GetDibBits because GetBitmapBits is deprecated

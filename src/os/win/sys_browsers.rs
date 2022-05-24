@@ -1,4 +1,8 @@
-use crate::error::BSResult as Result;
+use ::std::hash::{Hash, Hasher};
+use std::collections::hash_map::DefaultHasher;
+
+
+use crate::{error::BSResult as Result, ui::{BrowserSelectorUI, UserInterface, ListItem}};
 mod winapi {
     pub use winapi::shared::minwindef::DWORD;
     pub use winapi::shared::windef::HICON;
@@ -6,6 +10,7 @@ mod winapi {
     pub use winapi::um::winbase::GetBinaryTypeW;
     pub use winapi::um::winnls::GetUserDefaultUILanguage;
     pub use winapi::um::winver::{GetFileVersionInfoSizeW, GetFileVersionInfoW, VerQueryValueW};
+    pub use winapi::ctypes::*;
 }
 
 /// The `Browser` data structure is an entry mapped to the
@@ -48,6 +53,37 @@ impl Default for Browser {
     }
 }
 
+impl TryInto<ListItem<Browser>> for &Browser {
+    type Error = crate::error::BSError;
+    fn try_into(self) -> Result<ListItem<Browser>> {
+        let image =
+            BrowserSelectorUI::<Browser>::load_image(self.exe_path.as_str())
+                .unwrap_or_default();
+
+        let uuid = {
+            let mut hasher = DefaultHasher::new();
+            self.exe_path.hash(&mut hasher);
+            hasher.finish().to_string()
+        };
+
+        Ok(ListItem {
+            title: self.version.product_name.clone(),
+            subtitle: vec![
+                self.version.product_version.clone(),
+                self.version.binary_type.to_string(),
+                self.version.company_name.clone(),
+                self.version.file_description.clone(),
+            ]
+            .into_iter()
+            .filter(|itm| itm.len() > 0)
+            .collect::<Vec<String>>()
+            .join(" | "),
+            image,
+            uuid,
+            state: std::rc::Rc::new(self.clone()),
+        })
+    }
+}
 
 #[derive(Debug, Default)]
 struct WinExePath {
@@ -63,19 +99,24 @@ impl From<&str> for WinExePath {
         // TODO: Support dobule quote escaped arguments "someArg"
         // TODO: Use WinAPI to do this instead using this:
         // https://docs.microsoft.com/en-us/windows/win32/api/shellapi/nf-shellapi-shevaluatesystemcommandtemplate
-        if let [_, exe_path, args_part, ..] = *string_path.split('"').collect::<Vec<&str>>().as_slice() {
-            let arguments = match args_part.len() { 
+        if let [_, exe_path, args_part, ..] =
+            *string_path.split('"').collect::<Vec<&str>>().as_slice()
+        {
+            let arguments = match args_part.len() {
                 len if len > 0 => args_part.trim().split(' ').collect::<Vec<&str>>(),
                 _ => Vec::default(),
             };
             let arguments_len = arguments.len();
-            
+
             return WinExePath {
                 path_to_exe: String::from(exe_path),
-                arguments: arguments.into_iter().fold(Vec::with_capacity(arguments_len), |mut arg_list, arg| {
-                    arg_list.push(String::from(arg));
-                    arg_list
-                }),
+                arguments: arguments.into_iter().fold(
+                    Vec::with_capacity(arguments_len),
+                    |mut arg_list, arg| {
+                        arg_list.push(String::from(arg));
+                        arg_list
+                    },
+                ),
             };
         }
 
@@ -150,7 +191,7 @@ pub fn read_system_browsers_sync() -> Result<Vec<Browser>> {
             ),
         }
 
-        match crate::os_util::get_exe_file_icon(&browser.exe_path) {
+        match crate::os::get_exe_file_icon(&browser.exe_path) {
             Ok(icon) => browser.handle_icon = icon,
             Err(e) => println!(
                 "Error loading icon from file {}, Reason: {}",
@@ -192,7 +233,12 @@ fn read_browser_info_from_reg_key(reg_path: &str) -> std::io::Result<Browser> {
     let exe_path: String = shell_open_command_key.get_value("")?;
     let icon = icon_key.get_value("")?;
 
-    Ok(Browser { name, exe_path, icon, ..Browser::default() })
+    Ok(Browser {
+        name,
+        exe_path,
+        icon,
+        ..Browser::default()
+    })
 }
 
 fn read_browser_exe_info(path: &str) -> Result<VersionInfo> {
@@ -212,7 +258,7 @@ fn read_exe_arch(path: &str) -> Result<BinaryType> {
     const WINAPI_BITS32: u32 = 0;
     const WINAPI_BITS64: u32 = 6;
 
-    let file_path_wide = crate::os_util::str_to_wide(path);
+    let file_path_wide = crate::os::str_to_wide(path);
     let mut bin_type: u32 = NONE;
     let api_call_result =
         unsafe { winapi::GetBinaryTypeW(file_path_wide.as_ptr(), &mut bin_type as *mut u32) };
@@ -250,7 +296,7 @@ fn read_exe_arch(path: &str) -> Result<BinaryType> {
 ///  - we ask the for specific values of the properties `ProductName`, `CompanyName`, `ProductVersion` and if they're not `UTF-16` we convert them based on the indicated `Code Page`.
 fn read_exe_version_info(path: &str) -> Result<VersionInfo> {
     const UTF16_WINDOWS_CODE_PAGE: u16 = 1200;
-    let file_path_wide = crate::os_util::str_to_wide(path);
+    let file_path_wide = crate::os::str_to_wide(path);
     let file_version_size: u32 =
         unsafe { winapi::GetFileVersionInfoSizeW(file_path_wide.as_ptr(), &mut 0) };
     if file_version_size == 0 {
@@ -266,7 +312,7 @@ fn read_exe_version_info(path: &str) -> Result<VersionInfo> {
             file_path_wide.as_ptr(),
             0,
             file_version_size,
-            version_info_blob.as_mut_ptr() as *mut std::ffi::c_void,
+            version_info_blob.as_mut_ptr() as *mut winapi::c_void,
         ) == 0
         {
             bail!(
@@ -290,10 +336,10 @@ fn read_exe_version_info(path: &str) -> Result<VersionInfo> {
         // the number of bytes VerQueryValueW has written for the the requested sub block from within the `version_info_blob`
         let mut out_size: u32 = 0;
 
-        let translations_sub_block = crate::os_util::str_to_wide("\\VarFileInfo\\Translation");
+        let translations_sub_block = crate::os::str_to_wide("\\VarFileInfo\\Translation");
 
         let result = winapi::VerQueryValueW(
-            version_info_blob.as_ptr() as *mut std::ffi::c_void,
+            version_info_blob.as_ptr() as *mut winapi::c_void,
             translations_sub_block.as_ptr(),
             &mut out_pointer,
             &mut out_size,
@@ -358,8 +404,8 @@ fn read_exe_version_info(path: &str) -> Result<VersionInfo> {
             // the number of bytes VerQueryValueW has written for the the requested sub block from within the `version_info_blob`
             let mut out_size: u32 = 0;
             let result = winapi::VerQueryValueW(
-                version_info_blob.as_ptr() as *mut std::ffi::c_void,
-                crate::os_util::str_to_wide(block).as_ptr(),
+                version_info_blob.as_ptr() as *mut winapi::c_void,
+                crate::os::str_to_wide(block).as_ptr(),
                 &mut out_pointer,
                 &mut out_size,
             );
@@ -375,15 +421,14 @@ fn read_exe_version_info(path: &str) -> Result<VersionInfo> {
                 let raw_string =
                     std::slice::from_raw_parts(out_pointer as *const i8, out_size as usize)
                         .to_vec();
-                raw_wide_string =
-                    crate::os_util::ansi_str_to_wide(&raw_string, translation.wCodePage)?;
+                raw_wide_string = crate::os::ansi_str_to_wide(&raw_string, translation.wCodePage)?;
             } else {
                 raw_wide_string =
                     std::slice::from_raw_parts(out_pointer as *const u16, out_size as usize)
                         .to_vec();
             }
 
-            let result_str = crate::os_util::wide_to_str(&raw_wide_string);
+            let result_str = crate::os::wide_to_str(&raw_wide_string);
             results.push(result_str);
         }
 

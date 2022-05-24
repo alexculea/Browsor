@@ -4,22 +4,7 @@ use simple_error::SimpleResult as Result;
 use crate::error::*;
 use winapi::um::stringapiset::MultiByteToWideChar;
 use winapi::um::winuser::MessageBoxW;
-
-// TODO: Do we really need this function?
-// use winapi::winrt::roapi::RoInitialize;
-// pub unsafe fn initialize_runtime_com() -> winrt::Result<()> {
-//   let result = winrt::ErrorCode::from(Ok(RoInitialize(
-//     winapi::winrt::roapi::RO_INIT_MULTITHREADED, // TODO: Investigate if we need multithreaded due to winnit event loop
-//   )));
-
-//   if result.is_ok() {
-//     return winrt::Result::Ok(());
-//   }
-
-//   winapi::um::combaseapi::CoInitializeEx(std::ptr::null_mut(), 0x2);
-
-//   return Err(winrt::Error::from(result));
-// }
+use winapi::ctypes::c_void;
 
 pub fn get_hwnd(window: &winit::window::Window) -> winapi::shared::windef::HWND {
     match window.raw_window_handle() {
@@ -29,13 +14,6 @@ pub fn get_hwnd(window: &winit::window::Window) -> winapi::shared::windef::HWND 
         _ => panic!("No MS Windows specific window handle. Wrong platform?"),
     }
 }
-
-// TODO: Uncomment when implementing always on background running
-// pub fn hide_window(window: &winit::window::Window) {
-//   unsafe {
-//     winapi::um::winuser::ShowWindow(get_hwnd(window), winapi::um::winuser::SW_HIDE);
-//   }
-// }
 
 pub fn str_to_wide(string: &str) -> Vec<u16> {
     use std::ffi::OsStr;
@@ -88,7 +66,7 @@ pub fn as_u8_slice(v: &[u32]) -> &[u8] {
 pub fn get_exe_file_icon(path: &str) -> Result<winapi::shared::windef::HICON> {
     use winapi::um::shellapi::{SHGetFileInfoW, SHFILEINFOW, SHGFI_ICON, SHGFI_LARGEICON};
 
-    let wide_path = crate::os_util::str_to_wide(&path);
+    let wide_path = crate::os::str_to_wide(&path);
     let mut file_info: SHFILEINFOW = unsafe { std::mem::MaybeUninit::zeroed().assume_init() };
     let res = unsafe {
         SHGetFileInfoW(
@@ -150,7 +128,7 @@ pub fn _get_config_directory() -> BSResult<String> {
         }
     };
 
-    unsafe { CoTaskMemFree(wide_system_path as *mut std::ffi::c_void) };
+    unsafe { CoTaskMemFree(wide_system_path as *mut c_void) };
     result_path
 }
 
