@@ -26,6 +26,18 @@ winrt::Windows::UI::Xaml::UIElement LoadXamlControl(uint32_t id)
 ```
 taken from <https://github.com/microsoft/Xaml-Islands-Samples/tree/master/Samples/Win32/SampleCppApp>
 
+Rust variant:
+```Rust
+    use winrt::ComInterface;
+    use bindings::windows::ui::xaml::markup::XamlReader;
+    use bindings::windows::ui::xaml::UIElement;
+    
+    [...]
+
+    let xaml = fs::read_to_string("src\\main.xaml").expect("Cant read XAML file");
+    let ui_container = XamlReader::load(xaml).expect("Failed loading XAML").query::<UIElement>();
+```
+
 Loading resources at run time:
 [https://stackoverflow.com/questions/2933295/embed-text-file-in-a-resource-in-a-native-windows-application]
 

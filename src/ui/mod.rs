@@ -1,4 +1,6 @@
-mod windows_ui;
+#[cfg(target_os = "windows")]
+mod win;
+pub mod ev_loop;
 
 use crate::error::BSResult;
 use winit::dpi::PhysicalSize;
@@ -12,7 +14,7 @@ use std::rc::Rc;
 #[cfg(target_os = "windows")]
 pub type Image = bindings::windows::ui::xaml::controls::Image;
 #[cfg(target_os = "windows")]
-pub use windows_ui::BrowserSelectorUI;
+pub use win::BrowserSelectorUI;
 #[cfg(target_os = "windows")]
 mod windows_desktop_window_xaml_source;
 

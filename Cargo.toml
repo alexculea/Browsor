@@ -2,7 +2,7 @@
 name = "browser-selector"
 version = "0.1.0"
 authors = ["Alex Culea <16594531+alexculea@users.noreply.github.com>"]
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 winit = "0.24.0"

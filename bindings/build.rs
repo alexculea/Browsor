@@ -29,7 +29,6 @@ winrt::build!(
         GridLength,
         IGridStatics
       }
-      windows::ui::xaml::markup::*
       windows::ui::xaml::media::imaging::{
         SoftwareBitmapSource
       }
