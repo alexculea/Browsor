@@ -1,12 +1,12 @@
-use winit::event_loop::ControlFlow;
-use winit::event::WindowEvent;
-use winit::event::Event;
-use winit::event_loop::EventLoopWindowTarget;
+use std::rc::Rc;
+
+use winit::event_loop::{ControlFlow, EventLoopWindowTarget};
+use winit::event::{Event, WindowEvent};
 
 use crate::os::sys_browsers::Browser;
 
 pub fn make_ev_loop<UIType>(
-  url: String,
+  url: Rc<String>,
   window: winit::window::Window,
   ui: UIType,
 ) -> impl FnMut(Event<()>, &EventLoopWindowTarget<()>, &mut ControlFlow) -> ()

@@ -405,10 +405,10 @@ pub fn create_list_item(
     name_version_stack_panel.set_margin(&list_item_margins)?;
 
     let title_block = wrt::TextBlock::new()?;
-    title_block.set_text(title as &str)?;
+    title_block.set_text(title)?;
 
     let subtitle_block = wrt::TextBlock::new()?;
-    subtitle_block.set_text(subtext as &str)?;
+    subtitle_block.set_text(subtext)?;
     subtitle_block.set_foreground(create_color_brush(theme.dark_gray.clone())?)?;
 
     name_version_stack_panel.children()?.append(title_block)?;
