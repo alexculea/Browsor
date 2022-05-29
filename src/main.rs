@@ -6,10 +6,11 @@ mod error;
 mod os;
 mod ui;
 
-use os::sys_browsers::Browser;
+use std::rc::Rc;
 use winit::{event_loop::EventLoop, window::WindowBuilder};
 
 use crate::os::sys_browsers;
+use crate::os::sys_browsers::Browser;
 use crate::ui::{BrowserSelectorUI, ListItem, UserInterface};
 
 fn main() {
@@ -20,7 +21,11 @@ fn main() {
 
     let app_name = env!("CARGO_PKG_NAME");
     let app_version = env!("CARGO_PKG_VERSION");
-    let target_url = std::env::args().nth(1).unwrap_or(String::from(""));
+    let target_url = Rc::new(
+        std::env::args()
+            .nth(1)
+            .unwrap_or(String::from("about:home")),
+    );
 
     let mut ui = BrowserSelectorUI::new().expect("Failed to initialize COM or WinUI");
     let event_loop = EventLoop::new();
@@ -49,10 +54,10 @@ fn main() {
 
     ui.set_list(&list_items)
         .expect("Couldn't populate browsers in the UI.");
-    ui.set_url(target_url.as_str())
+    ui.set_url(&target_url)
         .expect("Couldn't render URL in the UI.");
 
-    let open_url_clone = target_url.clone();
+    let open_url_clone = Rc::clone(&target_url);
     ui.on_list_item_selected(move |uuid| {
         list_items
             .iter()
@@ -70,5 +75,5 @@ fn main() {
     .expect("Cannot set on click event handler.");
 
     window.set_visible(true);
-    event_loop.run(crate::ui::ev_loop::make_ev_loop(target_url, window, ui));
+    event_loop.run(ui::ev_loop::make_ev_loop(target_url, window, ui));
 }
