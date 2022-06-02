@@ -1,5 +1,5 @@
 #[cfg(target_os = "windows")]
-mod win;
+pub mod win; // TODO: Make private
 pub mod ev_loop;
 
 use crate::error::BSResult;

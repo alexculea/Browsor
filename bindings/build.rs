@@ -11,6 +11,8 @@ winrt::build!(
         DataWriter, IDataWriterFactory, IBuffer
       }
       windows::ui::xaml::{UIElement, RoutedEventHandler, Thickness}
+      windows::ui::xaml::markup::*
+      
       windows::ui::xaml::controls::{
         Button, IButtonFactory, 
         IRelativePanelFactory, RelativePanel, 
