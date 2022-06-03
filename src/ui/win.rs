@@ -159,6 +159,11 @@ impl<ItemStateType: Clone> UserInterface<ItemStateType> for BrowserSelectorUI<It
         Ok(())
     }
 
+    fn destroy(&self) {
+      #![allow(unused_must_use)]
+      self.state.xaml_isle.desktop_source.close();
+    }
+
     fn update_layout_size(&self, _: &Window, size: &PhysicalSize<u32>) -> BSResult<()> {
         update_xaml_island_size(&self.state.xaml_isle, *size)?;
 

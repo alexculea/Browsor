@@ -7,7 +7,7 @@ mod os;
 mod ui;
 
 use std::rc::Rc;
-use winit::{event_loop::EventLoop, window::WindowBuilder};
+use winit::window::WindowBuilder;
 
 use crate::os::sys_browsers;
 use crate::os::sys_browsers::Browser;
@@ -28,7 +28,7 @@ fn main() {
     );
 
     let mut ui = BrowserSelectorUI::new().expect("Failed to initialize COM or WinUI");
-    let event_loop = EventLoop::new();
+    let event_loop = ui::ev_loop::make_ev_loop();
     let window = WindowBuilder::new()
         .with_title(format!("{} {}", app_name, app_version))
         .with_decorations(true)
@@ -58,22 +58,25 @@ fn main() {
         .expect("Couldn't render URL in the UI.");
 
     let open_url_clone = Rc::clone(&target_url);
+    let ev_loop_proxy = event_loop.create_proxy();
     ui.on_list_item_selected(move |uuid| {
         list_items
             .iter()
             .find(|item| item.uuid == uuid)
             .and_then(|item| Some(item.state.as_ref()))
             .and_then::<std::rc::Rc<Browser>, _>(|browser| {
-                os::util::spawn_and_exit(
+                os::util::spawn_browser_process(
                     &browser.exe_path,
                     browser.arguments.clone(),
                     &open_url_clone,
                 );
                 None
             });
+
+        ev_loop_proxy.send_event(ui::ev_loop::UserEvent::Close).ok();
     })
     .expect("Cannot set on click event handler.");
 
     window.set_visible(true);
-    event_loop.run(ui::ev_loop::make_ev_loop(target_url, window, ui));
+    event_loop.run(ui::ev_loop::make_runner(target_url, window, ui));
 }

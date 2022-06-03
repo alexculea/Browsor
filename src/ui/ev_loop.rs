@@ -1,35 +1,43 @@
 use std::rc::Rc;
 
-use winit::event_loop::{ControlFlow, EventLoopWindowTarget};
+use winit::event_loop::{EventLoop, ControlFlow, EventLoopWindowTarget};
 use winit::event::{Event, WindowEvent};
 
 use crate::os::sys_browsers::Browser;
 
-pub fn make_ev_loop<UIType>(
+pub enum UserEvent {
+  Close
+}
+
+pub fn make_ev_loop() -> EventLoop<UserEvent> {
+  EventLoop::with_user_event()
+}
+
+pub fn make_runner<UIType>(
   url: Rc<String>,
   window: winit::window::Window,
   ui: UIType,
-) -> impl FnMut(Event<()>, &EventLoopWindowTarget<()>, &mut ControlFlow) -> ()
+) -> impl FnMut(Event<UserEvent>, &EventLoopWindowTarget<UserEvent>, &mut ControlFlow) -> ()
 where
   UIType: crate::ui::UserInterface<Browser>
 {
-  move |event: Event<()>, _, control_flow: &mut ControlFlow| {
+  move |event: Event<UserEvent>, _, control_flow: &mut ControlFlow| {
     *control_flow = ControlFlow::Wait;
     match event {
+        Event::UserEvent(_) => {
+            *control_flow = ControlFlow::Exit;
+        }
         Event::WindowEvent {
             event: WindowEvent::CloseRequested,
             window_id,
         } if window_id == window.id() => {
-            std::process::exit(0);
+            *control_flow = ControlFlow::Exit;
         }
         Event::WindowEvent {
             event: WindowEvent::Resized(_size),
             ..
         } => {
             ui.update_layout_size(&window, &_size).unwrap();
-            // this causes a memory violation
-            // when the program is closed but does work correclty
-            // while the program is running
         }
         Event::WindowEvent {
             event: WindowEvent::KeyboardInput { input, .. },
@@ -61,10 +69,12 @@ where
                 VirtualKeyCode::NumpadEnter | VirtualKeyCode::Return => {
                     let item = ui.get_selected_list_item().ok().unwrap().unwrap();
                     let browser = item.state.as_ref();
-                    crate::os::util::spawn_and_exit(&browser.exe_path, browser.arguments.clone(), &url);
+                    crate::os::util::spawn_browser_process(&browser.exe_path, browser.arguments.clone(), &url);
+                    
+                    *control_flow = ControlFlow::Exit;
                 }
                 VirtualKeyCode::Escape => {
-                    std::process::exit(0);
+                    *control_flow = ControlFlow::Exit;
                 }
                 vkey => {
                     if let Some(pos) = list_number_from_vkey(vkey) {
@@ -75,6 +85,10 @@ where
             }
         }
         _ => (),
+    }
+
+    if *control_flow == ControlFlow::Exit {
+      ui.destroy();
     }
   }
 }

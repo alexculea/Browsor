@@ -1,4 +1,4 @@
-pub fn spawn_and_exit(exe_path: &String, args: Vec<String>, url: &str) {
+pub fn spawn_browser_process(exe_path: &String, args: Vec<String>, url: &str) {
     let mut command_arguments = args;
     command_arguments.push(String::from(url));
 
@@ -10,5 +10,4 @@ pub fn spawn_and_exit(exe_path: &String, args: Vec<String>, url: &str) {
                 .to_owned()
                 .as_str(),
         );
-    std::process::exit(0);
 }
