@@ -8,7 +8,7 @@ use winapi::ctypes::c_void;
 
 pub fn get_hwnd(window: &winit::window::Window) -> winapi::shared::windef::HWND {
     match window.raw_window_handle() {
-        raw_window_handle::RawWindowHandle::Windows(wnd_handle) => {
+        raw_window_handle::RawWindowHandle::Win32(wnd_handle) => {
             wnd_handle.hwnd as winapi::shared::windef::HWND
         }
         _ => panic!("No MS Windows specific window handle. Wrong platform?"),

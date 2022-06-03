@@ -37,6 +37,8 @@ pub trait UserInterface<T: Clone> {
         &self,
         event_handler: impl FnMut(&str) -> () + 'static,
     ) -> BSResult<()>;
+
+    fn destroy(&self);
 }
 
 #[derive(Clone)]
