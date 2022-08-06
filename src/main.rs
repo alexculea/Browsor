@@ -2,6 +2,7 @@
 #[macro_use]
 extern crate simple_error;
 
+mod conf;
 mod error;
 mod os;
 mod ui;
@@ -19,13 +20,10 @@ fn main() {
         std::process::exit(1);
     }));
 
+    let config = conf::read_config().unwrap_or_default();
     let app_name = env!("CARGO_PKG_NAME");
     let app_version = env!("CARGO_PKG_VERSION");
-    let target_url = Rc::new(
-        std::env::args()
-            .nth(1)
-            .unwrap_or(String::from("about:home")),
-    );
+    let target_url = Rc::new(std::env::args().nth(1).unwrap_or(config.default_url));
 
     let mut ui = BrowserSelectorUI::new().expect("Failed to initialize COM or WinUI");
     let event_loop = ui::ev_loop::make_ev_loop();
@@ -49,6 +47,18 @@ fn main() {
 
     let list_items: Vec<ListItem<Browser>> = browsers
         .iter()
+        .filter(|browser| {
+            let hide_browser = config.hide.iter().fold(false, |_, conf_hide_item| {
+                let hide_by_path = !conf_hide_item.path.is_empty()
+                    && browser.exe_path.contains(&conf_hide_item.path);
+                let hide_by_name =
+                    !conf_hide_item.name.is_empty() && browser.name.contains(&conf_hide_item.name);
+
+                hide_by_name || hide_by_path
+            });
+
+            !hide_browser // invert for filter as true = keep item, false = discard item from list
+        })
         .filter_map(|item| item.try_into().ok())
         .collect();
 
