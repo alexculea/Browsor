@@ -50,6 +50,20 @@ impl From<std::io::Error> for BSError {
     }
 }
 
+impl From<rusqlite::Error> for BSError {
+    fn from(error: rusqlite::Error) -> Self {
+        let error_message = format!("SQLite Error:- {}", error.to_string());
+        BSError::new(error_message.as_str())
+    }
+}
+
+impl<T> From<crossbeam_channel::SendError<T>> for BSError {
+    fn from(error: crossbeam_channel::SendError<T>) -> Self {
+        let error_message = format!("Crossbeam SendError:- {}", error.to_string());
+        BSError::new(error_message.as_str())
+    }
+}
+
 // impl From<std::io::Result<T>> for BSResult<T> {
 //     fn from(result: std::io::Result<T>) -> Self {
 //         match result {

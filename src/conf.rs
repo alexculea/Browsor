@@ -1,5 +1,6 @@
 use jsonschema::*;
 use serde::{Deserialize, Serialize};
+use winapi::shared::rpcndr::boolean;
 use std::io::Read;
 
 #[derive(Serialize, Deserialize, Debug, Default)]
@@ -18,6 +19,9 @@ pub struct Config {
     pub default_url: String,
 
     #[serde(default)]
+    pub statistics: bool,
+
+    #[serde(default)]
     pub hide: Vec<ConfigHideBrowsers>,
 }
 
@@ -27,6 +31,7 @@ impl Default for Config {
             version: 1,
             hide: Default::default(),
             default_url: String::from("about:home"),
+            statistics: false,
         }
     }
 }

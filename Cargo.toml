@@ -16,7 +16,8 @@ serde = "1.0"
 serde_yaml = "0.9"
 serde_json = "1.0.83"
 jsonschema = "0.16.0"
-
+rusqlite = { version = "0.28.0", features = ["winsqlite3"] }
+crossbeam-channel = "0.5.6"
 
 [build-dependencies]
 embed-resource = "1.4.1"

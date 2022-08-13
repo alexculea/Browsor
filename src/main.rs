@@ -6,6 +6,7 @@ mod conf;
 mod error;
 mod os;
 mod ui;
+mod data;
 
 use std::rc::Rc;
 use winit::window::WindowBuilder;
@@ -24,6 +25,12 @@ fn main() {
     let app_name = env!("CARGO_PKG_NAME");
     let app_version = env!("CARGO_PKG_VERSION");
     let target_url = Rc::new(std::env::args().nth(1).unwrap_or(config.default_url));
+
+    if config.statistics {
+        let mut statistics_db_path = std::env::current_exe().unwrap_or_default();
+        statistics_db_path.set_file_name("statistics.sqlite");
+        data::StatisticsWorker::new(&statistics_db_path);
+    }
 
     let mut ui = BrowserSelectorUI::new().expect("Failed to initialize COM or WinUI");
     let event_loop = ui::ev_loop::make_ev_loop();
