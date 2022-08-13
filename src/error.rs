@@ -30,6 +30,12 @@ impl From<simple_error::SimpleError> for BSError {
     }
 }
 
+impl From<serde_yaml::Error> for BSError {
+    fn from(err: serde_yaml::Error) -> Self {
+        BSError::new(&err.to_string())
+    }
+}
+
 impl From<&str> for BSError {
     fn from(str: &str) -> Self {
         BSError::new(str)

@@ -1,0 +1,26 @@
+type: object
+properties:
+  version:
+    type: number
+  hide:
+    type: array
+    items:
+      type: object
+      properties:
+        name: 
+          type: string
+          description: "If defined, will hide browser if its name contains the configured value. It is case sensitive."
+        path:
+          type: string
+          description: "If defined, will hide browser if its executable path contains the configured value. It is case sensitive."
+      anyOf:
+        - required:
+          - name
+        - required:
+          - path
+    description: 'List of browsers to hide from the selection.'
+  default_url:
+    type: string
+    description: 'The default URL to open when a certain URL is not specified. Default: about:home'
+required:
+  - version
