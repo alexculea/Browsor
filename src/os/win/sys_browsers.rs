@@ -2,7 +2,8 @@ use ::std::hash::{Hash, Hasher};
 use std::collections::hash_map::DefaultHasher;
 
 
-use crate::{error::BSResult as Result, ui::{BrowserSelectorUI, UserInterface, ListItem}};
+use crate::ui::{BrowserSelectorUI, UserInterface, ListItem};
+use anyhow::Result;
 mod winapi {
     pub use winapi::shared::minwindef::DWORD;
     pub use winapi::shared::windef::HICON;
@@ -54,7 +55,7 @@ impl Default for Browser {
 }
 
 impl TryInto<ListItem<Browser>> for &Browser {
-    type Error = crate::error::BSError;
+    type Error = anyhow::Error;
     fn try_into(self) -> Result<ListItem<Browser>> {
         let image =
             BrowserSelectorUI::<Browser>::load_image(self.exe_path.as_str())

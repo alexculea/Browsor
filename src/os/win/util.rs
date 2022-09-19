@@ -1,7 +1,6 @@
 use raw_window_handle::HasRawWindowHandle;
-use simple_error::SimpleResult as Result;
+use anyhow::{Result};
 
-use crate::error::*;
 use winapi::um::stringapiset::MultiByteToWideChar;
 use winapi::um::winuser::MessageBoxW;
 use winapi::ctypes::c_void;
@@ -91,14 +90,14 @@ pub fn get_exe_file_icon(path: &str) -> Result<winapi::shared::windef::HICON> {
     Ok(file_info.hIcon)
 }
 
-pub fn _get_config_directory() -> BSResult<String> {
+pub fn _get_config_directory() -> Result<String> {
     use winapi::shared::winerror::S_OK;
     use winapi::um::combaseapi::CoTaskMemFree;
     use winapi::um::knownfolders::FOLDERID_RoamingAppData;
     use winapi::um::shlobj::SHGetKnownFolderPath;
 
     let mut wide_system_path: *mut u16 = std::ptr::null_mut();
-    let result_path: BSResult<String> = unsafe {
+    let result_path: Result<String> = unsafe {
         match SHGetKnownFolderPath(
             &FOLDERID_RoamingAppData,
             0,
@@ -122,9 +121,9 @@ pub fn _get_config_directory() -> BSResult<String> {
 
                 Ok(path)
             }
-            code => Err(BSError::from(
-                format!("Error getting OS config directory. Error code: {:?}", code).as_str(),
-            )),
+            code => Err(
+                anyhow!("Error getting OS config directory. Error code: {:?}", code),
+            ),
         }
     };
 
@@ -132,7 +131,7 @@ pub fn _get_config_directory() -> BSResult<String> {
     result_path
 }
 
-pub fn _get_create_config_directory(app_name: &str, env_name: &str) -> BSResult<String> {
+pub fn _get_create_config_directory(app_name: &str, env_name: &str) -> Result<String> {
     let app_data_dir = _get_config_directory()?;
     let os_path = std::path::Path::new(&app_data_dir);
     let subpath = format!("{}/{}", app_name, env_name);

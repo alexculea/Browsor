@@ -44,7 +44,7 @@ mod winapi {
     pub use winapi::ctypes::*;
 }
 
-use crate::error::*;
+use anyhow::{Context, Result};
 use crate::os::{as_u8_slice, get_hwnd};
 use crate::ui::windows_desktop_window_xaml_source::IDesktopWindowXamlSourceNative;
 
@@ -116,7 +116,7 @@ const URL_CONTROL_NAME: &str = "urlControl";
 const HEADER_PANEL_NAME: &str = "headerPanel";
 
 impl<ItemStateType: Clone> UserInterface<ItemStateType> for BrowserSelectorUI<ItemStateType> {
-    fn new() -> BSResult<Self> {
+    fn new() -> Result<Self> {
         // TODO: Correct error handling
         // unsafe { initialize_runtime_com()?; }
 
@@ -134,7 +134,7 @@ impl<ItemStateType: Clone> UserInterface<ItemStateType> for BrowserSelectorUI<It
         Ok(BrowserSelectorUI { state })
     }
 
-    fn create(&mut self, window: &Window) -> BSResult<()> {
+    fn create(&mut self, window: &Window) -> Result<()> {
         let size = window.inner_size();
         self.state.xaml_isle.hwnd = attach_window_to_xaml(&window, &mut self.state.xaml_isle)?;
         update_xaml_island_size(&self.state.xaml_isle, size)?;
@@ -164,13 +164,13 @@ impl<ItemStateType: Clone> UserInterface<ItemStateType> for BrowserSelectorUI<It
       self.state.xaml_isle.desktop_source.close();
     }
 
-    fn update_layout_size(&self, _: &Window, size: &PhysicalSize<u32>) -> BSResult<()> {
+    fn update_layout_size(&self, _: &Window, size: &PhysicalSize<u32>) -> Result<()> {
         update_xaml_island_size(&self.state.xaml_isle, *size)?;
 
         Ok(())
     }
 
-    fn set_list(&mut self, list: &[ListItem<ItemStateType>]) -> BSResult<()> {
+    fn set_list(&mut self, list: &[ListItem<ItemStateType>]) -> Result<()> {
         if let Some(ui_element) =
             recursive_find_child_by_tag(&self.state.container, LIST_CONTROL_NAME)?
         {
@@ -182,28 +182,28 @@ impl<ItemStateType: Clone> UserInterface<ItemStateType> for BrowserSelectorUI<It
         Ok(())
     }
 
-    fn set_url(&self, new_url: &str) -> BSResult<()> {
+    fn set_url(&self, new_url: &str) -> Result<()> {
         if let Some(ui_element) =
             recursive_find_child_by_tag(&self.state.container, URL_CONTROL_NAME)?
         {
             let text_block = ComInterface::query::<wrt::TextBlock>(&ui_element);
-            text_block.set_text(new_url)?;
+            text_block.set_text(new_url);
         }
 
         Ok(())
     }
 
-    fn load_image(path: &str) -> BSResult<Image> {
+    fn load_image(path: &str) -> Result<Image> {
         let hicon = crate::os::get_exe_file_icon(path)?;
         let bmp = hicon_to_software_bitmap(hicon)?;
 
         match software_bitmap_to_xaml_image(bmp) {
             Ok(image) => Ok(image),
-            Err(winrt_error) => Err(BSError::from(winrt_error)),
+            Err(winrt_error) => Err(winrt_error),
         }
     }
 
-    fn select_list_item_by_index(&self, index: isize) -> BSResult<()> {
+    fn select_list_item_by_index(&self, index: isize) -> Result<()> {
         let list_control: wrt::ListView =
             recursive_find_child_by_tag(&self.state.container, LIST_CONTROL_NAME)
                 .unwrap()
@@ -215,7 +215,7 @@ impl<ItemStateType: Clone> UserInterface<ItemStateType> for BrowserSelectorUI<It
         Ok(())
     }
 
-    fn get_selected_list_item_index(&self) -> BSResult<isize> {
+    fn get_selected_list_item_index(&self) -> Result<isize> {
         let list_control: wrt::ListView =
             recursive_find_child_by_tag(&self.state.container, LIST_CONTROL_NAME)
                 .unwrap()
@@ -224,7 +224,7 @@ impl<ItemStateType: Clone> UserInterface<ItemStateType> for BrowserSelectorUI<It
 
         Ok(list_control.selected_index()? as isize)
     }
-    fn get_selected_list_item(&self) -> BSResult<Option<ListItem<ItemStateType>>> {
+    fn get_selected_list_item(&self) -> Result<Option<ListItem<ItemStateType>>> {
         let selected_index = self.get_selected_list_item_index()?;
         if selected_index < 0 {
             return Ok(None);
@@ -237,7 +237,7 @@ impl<ItemStateType: Clone> UserInterface<ItemStateType> for BrowserSelectorUI<It
     fn on_list_item_selected(
         &self,
         mut event_handler: impl FnMut(&str) -> () + 'static,
-    ) -> BSResult<()> {
+    ) -> Result<()> {
         let list_control: wrt::ListView =
             recursive_find_child_by_tag(&self.state.container, LIST_CONTROL_NAME)
                 .unwrap()
@@ -245,7 +245,7 @@ impl<ItemStateType: Clone> UserInterface<ItemStateType> for BrowserSelectorUI<It
                 .query();
         list_control.set_is_item_click_enabled(true)?;
         list_control.item_click(wrt::ItemClickEventHandler::new(
-            move |_: &winrt::Object, event: &wrt::ItemClickEventArgs| -> winrt::Result<()> {
+            move |_: &winrt::Object, event: &wrt::ItemClickEventArgs| -> Result<()> {
                 let item_tag = ui_element_get_tag_as_string(&event.clicked_item()?)
                     .unwrap()
                     .unwrap();
@@ -258,12 +258,12 @@ impl<ItemStateType: Clone> UserInterface<ItemStateType> for BrowserSelectorUI<It
         Ok(())
     }
 
-    fn get_list_length(&self) -> BSResult<usize> {
+    fn get_list_length(&self) -> Result<usize> {
         Ok(self.state.list.len())
     }
 }
 
-pub fn init_win_ui_xaml() -> winrt::Result<XamlIslandWindow> {
+pub fn init_win_ui_xaml() -> Result<XamlIslandWindow> {
     use winrt::Object;
     let mut xaml_isle = XamlIslandWindow::default();
     xaml_isle.win_xaml_mgr = wrt::WindowsXamlManager::initialize_for_current_thread()?;
@@ -278,7 +278,7 @@ pub fn init_win_ui_xaml() -> winrt::Result<XamlIslandWindow> {
 pub fn attach_window_to_xaml(
     window: &winit::window::Window,
     xaml_isle: &mut XamlIslandWindow,
-) -> winrt::Result<*mut std::ffi::c_void> {
+) -> Result<*mut std::ffi::c_void> {
     xaml_isle.hwnd_parent = get_hwnd(window) as *mut std::ffi::c_void;
 
     xaml_isle
@@ -290,7 +290,7 @@ pub fn attach_window_to_xaml(
 pub fn update_xaml_island_size(
     xaml_isle: &XamlIslandWindow,
     size: winit::dpi::PhysicalSize<u32>,
-) -> winrt::Result<()> {
+) -> Result<()> {
     unsafe {
         winapi::SetWindowPos(
             xaml_isle.hwnd as winapi::HWND,
@@ -306,7 +306,7 @@ pub fn update_xaml_island_size(
     Ok(())
 }
 
-pub fn create_ui<T: Clone>(ui: &UIState<T>, theme: &Theme) -> winrt::Result<wrt::UIElement> {
+pub fn create_ui<T: Clone>(ui: &UIState<T>, theme: &Theme) -> Result<wrt::UIElement> {
     let header_panel = create_header("You are about to open:", "", &theme)?;
     let list = create_list(&ui.list, &theme)?;
     let grid = create_main_layout_grid(&theme)?;
@@ -332,7 +332,7 @@ pub fn create_ui<T: Clone>(ui: &UIState<T>, theme: &Theme) -> winrt::Result<wrt:
 /// fit to be used for presentation in the main window where the top
 /// row has the action intro text (ie. "You are about to open x URL")
 /// and the bottom row has the list of browsers available.
-pub fn create_main_layout_grid(theme: &Theme) -> winrt::Result<wrt::Grid> {
+pub fn create_main_layout_grid(theme: &Theme) -> Result<wrt::Grid> {
     let grid = winrt::factory::<wrt::Grid, wrt::IGridFactory>()?
         .create_instance(winrt::Object::default(), &mut winrt::Object::default())?;
     let column_definition = wrt::ColumnDefinition::new()?;
@@ -351,7 +351,7 @@ pub fn create_main_layout_grid(theme: &Theme) -> winrt::Result<wrt::Grid> {
     Ok(grid)
 }
 
-fn create_theme() -> winrt::Result<Theme> {
+fn create_theme() -> Result<Theme> {
     let ui_settings = wrt::UISettings::new()?;
     let os_foreground = ui_settings.get_color_value(wrt::UIColorType::Foreground)?;
     let os_background = ui_settings.get_color_value(wrt::UIColorType::Background)?;
@@ -379,7 +379,7 @@ fn create_theme() -> winrt::Result<Theme> {
     })
 }
 
-fn create_color_brush(color: wrt::Color) -> winrt::Result<wrt::SolidColorBrush> {
+fn create_color_brush(color: wrt::Color) -> Result<wrt::SolidColorBrush> {
     let brush = wrt::SolidColorBrush::new()?;
     brush.set_color(color)?;
 
@@ -396,7 +396,7 @@ pub fn create_list_item(
     image: &wrt::Image,
     tag: &str,
     theme: &Theme,
-) -> winrt::Result<wrt::UIElement> {
+) -> Result<wrt::UIElement> {
     let list_item_margins = wrt::Thickness {
         top: 5.,
         left: 15.,
@@ -429,7 +429,7 @@ pub fn create_list_item(
     Ok(root_stack_panel.into())
 }
 
-pub fn create_stack_panel() -> winrt::Result<wrt::StackPanel> {
+pub fn create_stack_panel() -> Result<wrt::StackPanel> {
     let stack_panel = winrt::factory::<wrt::StackPanel, wrt::IStackPanelFactory>()?
         .create_instance(winrt::Object::default(), &mut winrt::Object::default())?;
 
@@ -439,7 +439,7 @@ pub fn create_stack_panel() -> winrt::Result<wrt::StackPanel> {
 pub fn create_list<T: Clone>(
     list: &Vec<ListItem<T>>,
     theme: &Theme,
-) -> winrt::Result<wrt::UIElement> {
+) -> Result<wrt::UIElement> {
     let list_control = winrt::factory::<wrt::ListView, wrt::IListViewFactory>()?
         .create_instance(winrt::Object::default(), &mut winrt::Object::default())?;
     list_control.set_margin(wrt::Thickness {
@@ -466,7 +466,7 @@ pub fn set_listview_items<T: Clone>(
     list_control: &wrt::ListView,
     list: &[ListItem<T>],
     theme: &Theme,
-) -> winrt::Result<()> {
+) -> Result<()> {
     for item in list {
         list_control
             .items()?
@@ -486,7 +486,7 @@ pub fn create_header(
     open_action_text: &str,
     url: &str,
     theme: &Theme,
-) -> winrt::Result<wrt::StackPanel> {
+) -> Result<wrt::StackPanel> {
     let stack_panel = winrt::factory::<wrt::StackPanel, wrt::IStackPanelFactory>()?
         .create_instance(winrt::Object::default(), &mut winrt::Object::default())?;
     let call_to_action_top_row = wrt::TextBlock::new()?;
@@ -514,7 +514,7 @@ pub fn create_header(
 /// From the given WinRT SoftwareBitmap it returns
 /// the corresponding WinUI Image XAML control that can be inserted
 /// as a node in any UIElement derived object
-pub fn software_bitmap_to_xaml_image(bmp: wrt::SoftwareBitmap) -> winrt::Result<wrt::Image> {
+pub fn software_bitmap_to_xaml_image(bmp: wrt::SoftwareBitmap) -> Result<wrt::Image> {
     // ToDO: Can we achieve the same thing without this conversion?
     // Background: ImageSource.SetBitmapAsync will throw an exception if
     // the bitmap set is not Pixel Format: BGRA8, BitmapAlphaMode: Premulitplied
@@ -542,7 +542,7 @@ pub fn software_bitmap_to_xaml_image(bmp: wrt::SoftwareBitmap) -> winrt::Result<
 /// - There probably is a simpler way to achieve this
 /// - The function does not implement all possiblities described in the Windows API doc
 /// thus it is possible that it might not work for certain icon formats
-pub fn hicon_to_software_bitmap(hicon: winapi::HICON) -> BSResult<wrt::SoftwareBitmap> {
+pub fn hicon_to_software_bitmap(hicon: winapi::HICON) -> Result<wrt::SoftwareBitmap> {
     let mut icon_info: winapi::ICONINFO = unsafe { MaybeUninit::uninit().assume_init() };
     let icon_result = unsafe { winapi::GetIconInfo(hicon, &mut icon_info) };
     if icon_result == 0 {
@@ -665,7 +665,7 @@ pub fn hicon_to_software_bitmap(hicon: winapi::HICON) -> BSResult<wrt::SoftwareB
 }
 
 /// Centers the given [`Window`] on the monitor where the mouse cursor is found.
-fn center_window_on_cursor_monitor(window: &Window) -> winrt::Result<()> {
+fn center_window_on_cursor_monitor(window: &Window) -> Result<()> {
   let cursor_pos = unsafe {
       let mut point: winapi::POINT = Default::default();
       winapi::GetCursorPos(std::ptr::addr_of_mut!(point));
@@ -711,7 +711,7 @@ fn center_window_on_cursor_monitor(window: &Window) -> winrt::Result<()> {
 fn recursive_find_child_by_tag(
     parent: &impl winrt::ComInterface,
     needle: &str,
-) -> winrt::Result<Option<wrt::UIElement>> {
+) -> Result<Option<wrt::UIElement>> {
     let items_control: wrt::Panel = parent.query();
     if items_control.is_null() {
         return Err(winrt::Error::new(
@@ -755,7 +755,7 @@ fn recursive_find_child_by_tag(
     }
 }
 
-fn ui_element_get_tag_as_string(el: &impl ComInterface) -> BSResult<Option<String>> {
+fn ui_element_get_tag_as_string(el: &impl ComInterface) -> Result<Option<String>> {
     let item_as_framework_elem = ComInterface::query::<wrt::FrameworkElement>(el);
     if item_as_framework_elem.is_null() {
         bail!("Element given in not valid or does not inherit from FrameworkElement");
@@ -775,7 +775,7 @@ fn ui_element_get_tag_as_string(el: &impl ComInterface) -> BSResult<Option<Strin
     Ok(Some(value))
 }
 
-fn ui_element_set_string_tag(el: &impl ComInterface, tag: &str) -> BSResult<()> {
+fn ui_element_set_string_tag(el: &impl ComInterface, tag: &str) -> Result<()> {
     let item_as_framework_elem = ComInterface::query::<wrt::FrameworkElement>(el);
     if item_as_framework_elem.is_null() {
         bail!("Element given in not valid or does not inherit from FrameworkElement");

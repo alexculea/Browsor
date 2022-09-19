@@ -2,7 +2,7 @@
 mod win;
 pub mod ev_loop;
 
-use crate::error::BSResult;
+use anyhow::Result;
 use winit::dpi::PhysicalSize;
 use winit::window::Window;
 
@@ -19,24 +19,24 @@ pub use win::BrowserSelectorUI;
 mod windows_desktop_window_xaml_source;
 
 pub trait UserInterface<T: Clone> {
-    fn new() -> BSResult<BrowserSelectorUI<T>>;
-    fn create(&mut self, winit_wnd: &Window) -> BSResult<()>;
+    fn new() -> Result<BrowserSelectorUI<T>>;
+    fn create(&mut self, winit_wnd: &Window) -> Result<()>;
 
-    fn set_list(&mut self, list: &[ListItem<T>]) -> BSResult<()>;
-    fn set_url(&self, url: &str) -> BSResult<()>;
+    fn set_list(&mut self, list: &[ListItem<T>]) -> Result<()>;
+    fn set_url(&self, url: &str) -> Result<()>;
 
-    fn update_layout_size(&self, window: &Window, size: &PhysicalSize<u32>) -> BSResult<()>;
-    fn load_image(path: &str) -> BSResult<Image>;
+    fn update_layout_size(&self, window: &Window, size: &PhysicalSize<u32>) -> Result<()>;
+    fn load_image(path: &str) -> Result<Image>;
 
-    fn select_list_item_by_index(&self, index: isize) -> BSResult<()>;
-    fn get_selected_list_item_index(&self) -> BSResult<isize>;
-    fn get_selected_list_item(&self) -> BSResult<Option<ListItem<T>>>;
-    fn get_list_length(&self) -> BSResult<usize>;
+    fn select_list_item_by_index(&self, index: isize) -> Result<()>;
+    fn get_selected_list_item_index(&self) -> Result<isize>;
+    fn get_selected_list_item(&self) -> Result<Option<ListItem<T>>>;
+    fn get_list_length(&self) -> Result<usize>;
 
     fn on_list_item_selected(
         &self,
         event_handler: impl FnMut(&str) -> () + 'static,
-    ) -> BSResult<()>;
+    ) -> Result<()>;
 
     fn destroy(&self);
 }

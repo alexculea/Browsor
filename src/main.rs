@@ -1,6 +1,6 @@
 #![windows_subsystem = "windows"]
 #[macro_use]
-extern crate simple_error;
+extern crate anyhow;
 
 mod conf;
 mod error;
