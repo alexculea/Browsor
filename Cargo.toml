@@ -6,7 +6,7 @@ edition = "2021"
 
 [dependencies]
 winit = "0.26.1"
-winrt = "0.7.0"
+windows = "0.43.0"
 winapi = { version = "0.3.9", features = ["winuser", "roapi", "winver", "shellapi", "winnls", "stringapiset", "shlobj", "knownfolders"] }
 bindings = { path = "bindings" }
 raw-window-handle = "0.4.3"

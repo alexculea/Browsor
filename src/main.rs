@@ -3,7 +3,6 @@
 extern crate anyhow;
 
 mod conf;
-mod error;
 mod os;
 mod ui;
 
