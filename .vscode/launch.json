@@ -19,6 +19,18 @@
             "program": "${workspaceFolder}/target/debug/browser-selector.exe",
             "args": ["https://www.google.com"],
             "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "Debug Build (LLDB)",
+            "type": "lldb",
+            "request": "launch",
+            "program": "${workspaceFolder}/bindings/target/debug/force-build.exe",
+            "args": ["build"],
+            "cwd": "${workspaceFolder}/bindings",
+            "env":{
+                "OUT_DIR": "${workspaceFolder}/bindings/target",
+                "CARGO_MANIFEST_DIR": "${workspaceFolder}/bindings"
+            }
         }
     ]
 }
