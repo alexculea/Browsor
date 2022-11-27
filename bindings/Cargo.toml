@@ -2,22 +2,37 @@
 name = "bindings"
 version = "0.1.0"
 edition = "2018"
-build = "build.rs"
+# build = "build.rs"
 
-[dependencies]
-windows = "0.43.0"
+[dependencies.windows]
+version = "0.43.0"
+features = [
+    "implement",
+    "Foundation_Collections",
+    "Foundation_Diagnostics",
+    "Foundation_Numerics",
+    "Foundation_Metadata",
+]
 
 [build-dependencies]
 windows-bindgen = "0.43.0"
 windows-metadata = "0.43.0"
+regex = "1.7.0"
 
 # Turn these on to debug the build script
 # then run cargo build --bin force-build
-# [[bin]]
-# name = "force-build"
-# path = "build.rs"
+[[bin]]
+name = "force-build"
+path = "build.rs"
 
-# [dependencies]
-# windows-bindgen = "0.43.0"
-# windows-metadata = "0.43.0"
+# Turn these on to debug the build script
+# then run cargo build --bin force-build
+[[bin]]
+name = "play"
+path = "playground.rs"
+
+[dependencies]
+windows-bindgen = "0.43.0"
+windows-metadata = "0.43.0"
+regex = "1.7.0"
 # windows = "0.43.0"
