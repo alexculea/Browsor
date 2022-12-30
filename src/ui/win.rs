@@ -1,5 +1,6 @@
 use std::convert::TryInto;
 use std::mem::MaybeUninit;
+use std::ops::{Index, IndexMut};
 
 // For clarity purposes keep all WinRT imports under wrt::
 // winrt is a different crate dealing with types for calling the imported resources
@@ -22,26 +23,26 @@ mod wrt {
         Button, ColumnDefinition, Grid, IButtonFactory, IGridFactory, IListBoxFactory,
         IListViewFactory, IRelativePanelFactory, IScrollViewerStatics, IStackPanelFactory, Image,
         ItemClickEventArgs, ItemClickEventHandler, ItemsControl, ListBox, ListView,
-        ListViewSelectionMode, Orientation, Panel, RelativePanel, RowDefinition, ScrollMode,
-        ScrollViewer, StackPanel, TextBlock,
+        ListViewSelectionMode, Orientation, Panel, ProgressRing, RelativePanel, RowDefinition,
+        ScrollMode, ScrollViewer, StackPanel, TextBlock,
     };
     pub use bindings::windows::ui::xaml::interop::{TypeKind, TypeName};
     pub use bindings::windows::ui::xaml::media::imaging::{BitmapImage, SoftwareBitmapSource};
     pub use bindings::windows::ui::xaml::media::{ImageSource, SolidColorBrush};
     pub use bindings::windows::ui::xaml::{
         FrameworkElement, GridLength, GridUnitType, RoutedEventHandler, Thickness, UIElement,
-        VerticalAlignment,
+        VerticalAlignment, Visibility,
     };
     pub use bindings::windows::ui::Color;
 }
 
 mod winapi {
+    pub use winapi::ctypes::*;
     pub use winapi::shared::windef::{HGDIOBJ, HICON, HWND, POINT};
     pub use winapi::um::wingdi::{DeleteObject, GetBitmapBits, GetObjectW, BITMAP, DIBSECTION};
     pub use winapi::um::winuser::{
         GetCursorPos, GetIconInfo, SetWindowPos, UpdateWindow, ICONINFO, MONITORINFO,
     };
-    pub use winapi::ctypes::*;
 }
 
 use crate::error::*;
@@ -107,6 +108,7 @@ pub struct Theme {
 pub struct UIState<T: Clone> {
     pub xaml_isle: XamlIslandWindow,
     pub list: Vec<crate::ui::ListItem<T>>,
+    pub predictions: Vec<crate::ui::ListItem<T>>,
     pub container: wrt::Panel,
     pub theme: Theme,
 }
@@ -127,6 +129,7 @@ impl<ItemStateType: Clone> UserInterface<ItemStateType> for BrowserSelectorUI<It
         let state = UIState {
             xaml_isle: init_win_ui_xaml()?,
             list: Vec::<ListItem<ItemStateType>>::new(),
+            predictions: Vec::<ListItem<ItemStateType>>::new(),
             container: wrt::Panel::default(),
             theme: create_theme()?,
         };
@@ -151,17 +154,23 @@ impl<ItemStateType: Clone> UserInterface<ItemStateType> for BrowserSelectorUI<It
         self.state.container = ComInterface::query::<wrt::Panel>(&ui_container);
 
         center_window_on_cursor_monitor(window)?;
-        window.set_window_icon(Some(winit::window::Icon::from_resource(
-          1,
-          Some(winit::dpi::PhysicalSize { width: 16 as u32, height: 16 as u32 }),
-        ).unwrap()));
+        window.set_window_icon(Some(
+            winit::window::Icon::from_resource(
+                1,
+                Some(winit::dpi::PhysicalSize {
+                    width: 16 as u32,
+                    height: 16 as u32,
+                }),
+            )
+            .unwrap(),
+        ));
 
         Ok(())
     }
 
     fn destroy(&self) {
-      #![allow(unused_must_use)]
-      self.state.xaml_isle.desktop_source.close();
+        #![allow(unused_must_use)]
+        self.state.xaml_isle.desktop_source.close();
     }
 
     fn update_layout_size(&self, _: &Window, size: &PhysicalSize<u32>) -> BSResult<()> {
@@ -261,6 +270,98 @@ impl<ItemStateType: Clone> UserInterface<ItemStateType> for BrowserSelectorUI<It
     fn get_list_length(&self) -> BSResult<usize> {
         Ok(self.state.list.len())
     }
+
+    fn prediction_set_is_loading(&self, is_loading: bool) -> BSResult<()> {
+        let get_spinner_visibility = || { if is_loading { wrt::Visibility::Visible } else { wrt::Visibility::Collapsed } };
+        let predictions_panel_opt =
+            recursive_find_child_by_tag(&self.state.container, "predictions_panel")?;
+        if predictions_panel_opt.is_none() {
+            let predictions_panel =
+                winrt::factory::<wrt::StackPanel, wrt::IStackPanelFactory>()?
+                    .create_instance(winrt::Object::default(), &mut winrt::Object::default())?;
+            ui_element_set_string_tag(&predictions_panel, "predictions_panel")?;
+            predictions_panel.set_min_height(70.0)?;
+            predictions_panel.set_padding(wrt::Thickness { top: 15.0, right: 15.0, bottom: 15.0, left: 15.0 })?;
+
+            let title = wrt::TextBlock::new()?;
+            title.set_text("Predictions (...)")?;
+            ui_element_set_string_tag(&title, "predictions_title")?;
+
+            let spinner = wrt::ProgressRing::new()?;
+            spinner.set_is_active(is_loading)?;
+            ui_element_set_string_tag(&spinner, "predictions_spinner")?;
+            spinner.set_visibility(get_spinner_visibility())?;
+
+            predictions_panel.children()?.append(title)?;
+            predictions_panel.children()?.append(spinner)?;
+
+            wrt::Grid::set_row(&predictions_panel, 2)?;
+            wrt::Grid::set_column(&predictions_panel, 0)?;
+            self.state.container.children()?.append(predictions_panel)?;
+        } else {
+            let Some(predictions_panel) = predictions_panel_opt else { bail!("Panel is not None but not Some either?"); };
+            let spinner_elm =
+                recursive_find_child_by_tag(&predictions_panel, "predictions_spinner")?.unwrap();
+            let spinner = spinner_elm.query::<wrt::ProgressRing>();
+            spinner.set_is_active(is_loading)?;
+            spinner.set_visibility(get_spinner_visibility())?;
+        }
+
+        Ok(())
+    }
+
+    fn prediction_set_state(
+        &mut self,
+        list: &[ListItem<ItemStateType>],
+        duration: &str,
+    ) -> BSResult<()> {
+        self.prediction_set_is_loading(false)?;
+        
+        let mut predictions_list_panel =
+            recursive_find_child_by_tag(&self.state.container, "predictions_list_panel")?;
+        if predictions_list_panel.is_none() {
+            let predictions_panel =
+                recursive_find_child_by_tag(&self.state.container, "predictions_panel")?.unwrap();
+            let predictions_panel = predictions_panel.query::<wrt::StackPanel>();
+            let list_container = winrt::factory::<wrt::StackPanel, wrt::IStackPanelFactory>()?
+                .create_instance(winrt::Object::default(), &mut winrt::Object::default())?;
+            ui_element_set_string_tag(&list_container, "prediction_list_panel")?;
+            predictions_panel.children()?.append(list_container.clone())?;
+            predictions_list_panel = Some(list_container.query::<wrt::UIElement>());
+        }
+        let predictions_list_panel = predictions_list_panel.unwrap();
+        let predictions_list_panel = predictions_list_panel.query::<wrt::StackPanel>();
+        predictions_list_panel.children()?.clear()?;
+
+        let predictions_title =
+            recursive_find_child_by_tag(&self.state.container, "predictions_title")?.unwrap();
+        let predictions_title = predictions_title.query::<wrt::TextBlock>();
+        let predictions_title_str = format!("Predictions ({})", duration);
+        predictions_title.set_text(predictions_title_str.as_str())?;
+
+        let key_shortcuts = ["space", "backspace"];
+        let mut index = 0;
+        list.iter().try_for_each::<_, BSResult<()>>(| list_item | {
+            let text_block = wrt::TextBlock::new()?;
+            let mut text = list_item.title.clone();
+            if let Some(key) = key_shortcuts.iter().take(index + 1).last() {
+                text = format!("{} ({})", text, key);
+            }
+            text_block.set_text(text.as_str())?;
+            predictions_list_panel.children()?.append(text_block)?;
+
+            index += 1;
+            Ok(())
+        })?;
+
+        self.state.predictions = Vec::from(list);
+        
+        Ok(())
+    }
+
+    fn prediction_get_state(&self) -> &[ListItem<ItemStateType>] {
+        return &self.state.predictions;   
+    }
 }
 
 pub fn init_win_ui_xaml() -> winrt::Result<XamlIslandWindow> {
@@ -337,14 +438,20 @@ pub fn create_main_layout_grid(theme: &Theme) -> winrt::Result<wrt::Grid> {
         .create_instance(winrt::Object::default(), &mut winrt::Object::default())?;
     let column_definition = wrt::ColumnDefinition::new()?;
     let top_row_definition = wrt::RowDefinition::new()?;
-    let bottom_row_definition = wrt::RowDefinition::new()?;
+    let mid_row_def = wrt::RowDefinition::new()?;
+    let bottom_row_def = wrt::RowDefinition::new()?;
 
     top_row_definition.set_height(wrt::GridLength {
         value: 1.0,
         grid_unit_type: wrt::GridUnitType::Auto,
     })?;
+    bottom_row_def.set_height(wrt::GridLength {
+        value: 1.0,
+        grid_unit_type: wrt::GridUnitType::Auto,
+    })?;
     grid.row_definitions()?.append(top_row_definition)?;
-    grid.row_definitions()?.append(bottom_row_definition)?;
+    grid.row_definitions()?.append(mid_row_def)?;
+    grid.row_definitions()?.append(bottom_row_def)?;
     grid.column_definitions()?.append(column_definition)?;
     grid.set_background(create_color_brush(theme.white.clone())?)?;
 
@@ -666,46 +773,46 @@ pub fn hicon_to_software_bitmap(hicon: winapi::HICON) -> BSResult<wrt::SoftwareB
 
 /// Centers the given [`Window`] on the monitor where the mouse cursor is found.
 fn center_window_on_cursor_monitor(window: &Window) -> winrt::Result<()> {
-  let cursor_pos = unsafe {
-      let mut point: winapi::POINT = Default::default();
-      winapi::GetCursorPos(std::ptr::addr_of_mut!(point));
-      point
-  };
-  let current_monitor = window
-      .available_monitors()
-      .find(move |monitor| {
-          let pos = monitor.position();
-          let size = monitor.size();
+    let cursor_pos = unsafe {
+        let mut point: winapi::POINT = Default::default();
+        winapi::GetCursorPos(std::ptr::addr_of_mut!(point));
+        point
+    };
+    let current_monitor = window
+        .available_monitors()
+        .find(move |monitor| {
+            let pos = monitor.position();
+            let size = monitor.size();
 
-          let is_below_top = cursor_pos.x >= pos.x && cursor_pos.y >= pos.y;
-          let is_above_bottom = cursor_pos.x <= pos.x + size.width as i32
-              && cursor_pos.y <= pos.y + size.height as i32;
-          let is_within_monitor = is_below_top && is_above_bottom;
+            let is_below_top = cursor_pos.x >= pos.x && cursor_pos.y >= pos.y;
+            let is_above_bottom = cursor_pos.x <= pos.x + size.width as i32
+                && cursor_pos.y <= pos.y + size.height as i32;
+            let is_within_monitor = is_below_top && is_above_bottom;
 
-          is_within_monitor
-      })
-      .ok_or(winrt::Error::new(
-          winrt::ErrorCode(1),
-          "Could not determine monitor from the current cursor",
-      ))?;
+            is_within_monitor
+        })
+        .ok_or(winrt::Error::new(
+            winrt::ErrorCode(1),
+            "Could not determine monitor from the current cursor",
+        ))?;
 
-  let monitor_size = current_monitor.size();
-  let monitor_pos = current_monitor.position();
-  let window_size = window.outer_size();
+    let monitor_size = current_monitor.size();
+    let monitor_pos = current_monitor.position();
+    let window_size = window.outer_size();
 
-  let window_center_x = (window_size.width / 2) as i32;
-  let window_center_y = (window_size.height / 2) as i32;
-  let monitor_center_x = (monitor_pos.x + (monitor_size.width as i32)) / 2;
-  let monitor_center_y = (monitor_pos.y + (monitor_size.height as i32)) / 2;
-  let window_x = monitor_center_x - window_center_x;
-  let window_y = monitor_center_y - window_center_y;
-  
-  window.set_outer_position(winit::dpi::PhysicalPosition { 
-    x: window_x,
-    y: window_y,
-  });
+    let window_center_x = (window_size.width / 2) as i32;
+    let window_center_y = (window_size.height / 2) as i32;
+    let monitor_center_x = (monitor_pos.x + (monitor_size.width as i32)) / 2;
+    let monitor_center_y = (monitor_pos.y + (monitor_size.height as i32)) / 2;
+    let window_x = monitor_center_x - window_center_x;
+    let window_y = monitor_center_y - window_center_y;
 
-  Ok(())
+    window.set_outer_position(winit::dpi::PhysicalPosition {
+        x: window_x,
+        y: window_y,
+    });
+
+    Ok(())
 }
 
 fn recursive_find_child_by_tag(

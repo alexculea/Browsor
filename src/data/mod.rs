@@ -1,159 +1,124 @@
-
-use rusqlite::{Connection};
-use std::{path::{Path, PathBuf}, any::Any};
-use crate::error::{BSResult, BSError};
-use crossbeam_channel::{Sender, Receiver, unbounded};
-
 pub mod migrations;
+pub mod statistics_repository;
+pub mod thread_worker;
 
-pub struct StatisticsRepository {
-  pub connection: Connection,
+pub use self::statistics_repository::{SelectionEntity, StatisticsRepository};
+use self::thread_worker::ThreadWorker;
+use crate::error::BSResult;
+use std::path::{Path, PathBuf};
+
+pub struct Statistics {
+    repo: StatisticsRepository,
+    worker: Option<ThreadWorker>,
 }
 
-impl StatisticsRepository {
-  /// Instantiates repo and opens the SQLite database at the given `db_path`
-  pub fn new(db_file: &Path) -> BSResult<StatisticsRepository> {
-    let connection = Connection::open(db_file)?;
-    Ok(StatisticsRepository { connection })
-  }
-
-  pub fn select(&mut self, item: StatisticsEntity) -> BSResult<()> {
-    let mut query = r#"
-      SELECT * FROM history_selections 
-      INNER JOIN selections ON history_selections.selection_id = selections.id 
-      WHERE 
-    "#.to_string();
-    let criteria = [
-      ()
-    ]
-
-
-    let stmt = self.connection.prepare(query)?;
-    stmt.execute(params)
-  }
-
-  // pub fn save(&mut self, item: StatisticsEntity) -> BSResult<()> {
-  //   self.connection.prepare("SELECT * FROM history_selections INNER JOIN selections ON history_selections.selection_id = selections.id WHERE ")
-  // }
-}
-
-#[derive(Default)]
-pub struct StatisticsEntity {
-  browser_path_hash: Option<u64>,
-  base_domain_hash: Option<u64>,
-  browser_path: Option<String>,
-  hour: Option<u16>,
-  weekday: Option<u16>,
-  fqdn: Option<[char; 255]>,
-  uri: Option<[char; 255]>,
-  src: Option<[char; 255]>,
-}
-
-impl StatisticsEntity {
-  fn make_query_where_clause(&self) -> (String, (&str, &dyn Any)) {
-    let sql = "".to_string();
-    if let Some(browser_path_hash) = self.base_domain_hash {
-      sql += "browser_path_hash = ?"
+impl Statistics {
+    pub fn new() -> Self {
+        Self {
+            repo: StatisticsRepository::new(),
+            worker: None,
+        }
     }
-  }
-}
 
-/// All results from Statistics worker operations are served through
-/// this structure. Its member fields will be populated based on the 
-/// type of request.
-pub struct StatisticsResult {
-  /// The initiating message for the operation that completed
-  /// sucessfully.
-  op_msg: StatisticsWorkerMsg,
+    pub fn set_db_path(&mut self, path: &Path) {
+        self.repo.set_db_path(path);
+    }
 
-  /// The resutlting data when querying.
-  entity: Option<StatisticsEntity>,
-}
+    pub fn migrate_async(&mut self, result_cb: impl Fn(Box<BSResult<()>>) + 'static) {
+        let db_path = self.repo.get_db_path();
+        self.get_worker().run_async(
+            move || {
+                let mut conn = rusqlite::Connection::open(db_path).unwrap();
+                migrations::migrate(&mut conn)
+            },
+            Self::unwrap_result_callback(result_cb),
+        );
+    }
 
-pub enum StatisticsWorkerMsg {
-  Setup,
-  Predict(StatisticsEntity),
-  Save(StatisticsEntity),
-  Sucess(Box<StatisticsResult>),
-  Error(BSError),
-  Quit,
-}
+    pub fn update_selections(
+        &mut self,
+        list: Vec<SelectionEntity>,
+        result_cb: impl Fn(Box<BSResult<()>>) + 'static,
+    ) {
+        let mut repo_clone = self.repo.clone();
+        self.get_worker().run_async(
+            move || repo_clone.update_selections(list),
+            Self::unwrap_result_callback(result_cb),
+        );
+    }
 
-pub struct StatisticsWorker<'a> {
-  sender_main: Sender<StatisticsWorkerMsg>,
-  receiver_main: Receiver<StatisticsWorkerMsg>,
-  error_cb: &'a ErrorCallback,
-  sucess_cb: &'a SucessCallback,
-}
+    pub fn save_choice(
+        &mut self,
+        source: Option<PathBuf>,
+        url: &str,
+        browser_path_hash: &str,
+        browser_path: &str,
+        result_cb: impl Fn(Box<BSResult<()>>) + 'static,
+    ) {
+        let mut repo_clone = self.repo.clone();
+        let url_s = String::from(url);
+        let browser_path_hash_str = String::from(browser_path_hash);
+        let browser_path_str = String::from(browser_path);
+        self.get_worker().run_async(
+            move || {
+                repo_clone.save_choice(source, &url_s, &browser_path_hash_str, &browser_path_str)
+            },
+            Self::unwrap_result_callback(result_cb),
+        );
+    }
 
-pub type ErrorCallback = dyn Fn(BSError) -> ();
-pub type SucessCallback = dyn Fn(Box<StatisticsResult>) -> ();
-
-impl<'a> StatisticsWorker<'a> {
-  pub fn new(db: &Path) -> StatisticsWorker {
-    let (sender_main, receiver_main) = unbounded::<StatisticsWorkerMsg>();
-    let receiver_worker = receiver_main.clone();
-    let sender_worker = sender_main.clone();
-
-    let db_path = std::path::PathBuf::from(db);
-    std::thread::spawn(move || { StatisticsWorker::worker_main(db_path, receiver_worker, sender_worker) });
-    sender_main.send(StatisticsWorkerMsg::Setup).unwrap();
-
-    StatisticsWorker { sender_main, receiver_main, error_cb: &|_|{}, sucess_cb: &|_|{} }
-  }
-
-  pub fn on_error(&mut self, cb: &'a ErrorCallback) {
-    self.error_cb = cb;
-  }
-
-  pub fn on_success(&mut self, cb: &'a SucessCallback) {
-    self.sucess_cb = cb;
-  }
-
-  pub fn save_async(&mut self, item: StatisticsEntity) {
-    self.sender_main.send(StatisticsWorkerMsg::Save(item)).unwrap()
-  }
-
-  pub fn predict_async(&mut self, input: StatisticsEntity) {
-    self.sender_main.send(StatisticsWorkerMsg::Predict(input)).unwrap()
-  }
-
-  fn worker_main(db_path: PathBuf, receiver_worker: Receiver<StatisticsWorkerMsg>, sender_worker: Sender<StatisticsWorkerMsg>) -> BSResult<()> {
-    let mut statistics = StatisticsRepository::new(&db_path)?;
     
-    loop {
-      let op_msg = receiver_worker.recv().unwrap();
-      match op_msg {
-        StatisticsWorkerMsg::Setup => {
-          migrations::migrate(&mut statistics.connection)?;
-          sender_worker.send(StatisticsWorkerMsg::Sucess(
-            Box::new(StatisticsResult {
-              op_msg,
-              entity: None,
-            })
-          )).unwrap();
-        },
-        StatisticsWorkerMsg::Quit => break,
-        _ => ()
-      };
-
-      // std::thread::sleep(std::time::Duration::from_millis(1));
+    pub fn predict(
+        &mut self,
+        source: Option<PathBuf>,
+        url: &str,
+        result_cb: impl Fn(Box<BSResult<Vec<SelectionEntity>>>) + 'static,
+    ) {
+        let mut repo_clone = self.repo.clone();
+        let url_s = String::from(url);
+        self.get_worker().run_async(
+            move || {
+                repo_clone.predict(source, &url_s)
+            },
+            Self::unwrap_result_callback(result_cb),
+        );
     }
-    
-    Ok(())
-  }
 
-  fn process_main_thread_message(&self) {
-    match self.receiver_main.try_recv().unwrap() {
-      StatisticsWorkerMsg::Sucess(result) => (self.sucess_cb)(result),
-      StatisticsWorkerMsg::Error(err) => (self.error_cb)(err),
-      _ => return
+    pub fn tick(&mut self) -> bool {
+        self.get_worker().tick()
     }
-  }
+
+    fn unwrap_result_callback<T: 'static>(
+        result_cb: impl Fn(Box<T>) + 'static,
+    ) -> impl Fn(Box<dyn std::any::Any + Send>) + 'static {
+        move |incoming: Box<dyn std::any::Any + Send>| {
+            if let Ok(res) = incoming.downcast::<T>() {
+                result_cb(res);
+            } else {
+                panic!("Type mismatch for result from worker.");
+            }
+        }
+    }
+
+    fn get_worker(&mut self) -> &mut ThreadWorker {
+        if self.worker.is_none() {
+            self.worker = Some(ThreadWorker::new(|| {}));
+        }
+
+        self.worker.as_mut().unwrap()
+    }
+
+    pub fn is_finished(&self) -> bool {
+        if self.worker.is_some() {
+            self.worker.as_ref().unwrap().is_finished()
+        } else {
+            true
+        }
+    }
+
+    pub fn stop(&mut self) {
+        if let Some(ref mut worker) = self.worker.as_mut() {
+            worker.stop();
+        }
+    }
 }
-
- impl<'a> Drop for StatisticsWorker<'a> {
-  fn drop(&mut self) {
-      self.sender_main.send(StatisticsWorkerMsg::Quit).unwrap()
-  }
- }

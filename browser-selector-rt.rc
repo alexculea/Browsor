@@ -3,5 +3,8 @@
 1 ICON "assets\icon.ico"
 
 #define IDR_MAIN_XAML 101
+#define IDR_DNS_SUFFIX 102
 #define MAIN_XAML 256
+#define DNS_SUFFIX 257
 IDR_MAIN_XAML MAIN_XAML "src\main.xaml"
+IDR_DNS_SUFFIX DNS_SUFFIX "assets\\data\\tld-suffixes.dat"

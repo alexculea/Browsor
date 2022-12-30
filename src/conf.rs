@@ -1,6 +1,5 @@
 use jsonschema::*;
 use serde::{Deserialize, Serialize};
-use winapi::shared::rpcndr::boolean;
 use std::io::Read;
 
 #[derive(Serialize, Deserialize, Debug, Default)]

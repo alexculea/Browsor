@@ -1,13 +1,13 @@
 [package]
 name = "browser-selector"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Alex Culea <16594531+alexculea@users.noreply.github.com>"]
 edition = "2021"
 
 [dependencies]
-winit = "0.26.1"
+winit = "0.27.5"
 winrt = "0.7.0"
-winapi = { version = "0.3.9", features = ["winuser", "roapi", "winver", "shellapi", "winnls", "stringapiset", "shlobj", "knownfolders"] }
+winapi = { version = "0.3.9", features = ["winuser", "roapi", "winver", "shellapi", "winnls", "stringapiset", "shlobj", "knownfolders", "combaseapi", "errhandlingapi"] }
 bindings = { path = "bindings" }
 raw-window-handle = "0.4.3"
 simple-error = "0.2.1"
@@ -16,8 +16,14 @@ serde = "1.0"
 serde_yaml = "0.9"
 serde_json = "1.0.83"
 jsonschema = "0.16.0"
-rusqlite = { version = "0.28.0", features = ["winsqlite3"] }
-crossbeam-channel = "0.5.6"
+rusqlite = { version = "0.28.0", features = ["winsqlite3", "serde_json"] }
+serde_rusqlite = "0.31.0"
+structmap = "0.1.6"
+structmap-derive = "0.1.6"
+chrono = "0.4.24"
+url = "2.3.1"
+triple_accel = "0.4.0"
+
 
 [build-dependencies]
 embed-resource = "1.4.1"
@@ -26,3 +32,7 @@ embed-resource = "1.4.1"
 opt-level = 3
 lto = true
 codegen-units = 1
+
+
+[[bin]]
+name = "playground"

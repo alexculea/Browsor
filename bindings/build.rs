@@ -10,7 +10,7 @@ winrt::build!(
       windows::storage::streams::{
         DataWriter, IDataWriterFactory, IBuffer
       }
-      windows::ui::xaml::{UIElement, RoutedEventHandler, Thickness}
+      windows::ui::xaml::{UIElement, RoutedEventHandler, Thickness, Visibility}
       windows::ui::xaml::controls::{
         Button, IButtonFactory, 
         IRelativePanelFactory, RelativePanel, 
@@ -27,7 +27,8 @@ winrt::build!(
         IGridFactory,
         GridUnitType,
         GridLength,
-        IGridStatics
+        IGridStatics,
+        ProgressRing
       }
       windows::ui::xaml::media::imaging::{
         SoftwareBitmapSource

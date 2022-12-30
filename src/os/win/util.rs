@@ -1,10 +1,15 @@
+use std::ffi::{OsStr, OsString};
+use std::path::{Path, PathBuf};
+
 use raw_window_handle::HasRawWindowHandle;
 use simple_error::SimpleResult as Result;
+use winapi::um::libloaderapi::{GetModuleHandleW, FindResourceExW};
+use winapi::um::processthreadsapi::OpenProcess;
 
 use crate::error::*;
-use winapi::um::stringapiset::MultiByteToWideChar;
-use winapi::um::winuser::MessageBoxW;
 use winapi::ctypes::c_void;
+use winapi::um::stringapiset::MultiByteToWideChar;
+use winapi::um::winuser::{GetWindowTextW, MessageBoxW, MAKEINTRESOURCEW};
 
 pub fn get_hwnd(window: &winit::window::Window) -> winapi::shared::windef::HWND {
     match window.raw_window_handle() {
@@ -24,6 +29,10 @@ pub fn str_to_wide(string: &str) -> Vec<u16> {
 }
 
 pub fn wide_to_str(buf: &Vec<u16>) -> String {
+    String::from_utf16_lossy(&buf)
+}
+
+pub fn wide_slice_to_str(buf: &[u16]) -> String {
     String::from_utf16_lossy(&buf)
 }
 
@@ -150,5 +159,59 @@ pub fn _get_create_config_directory(app_name: &str, env_name: &str) -> BSResult<
 pub fn output_panic_text(text: String) {
     let wide_text = str_to_wide(&text);
     let title = str_to_wide(&"Panic!");
-    unsafe { MessageBoxW(std::ptr::null_mut(),  wide_text.as_ptr(), title.as_ptr(), winapi::um::winuser::MB_OK); }
+    unsafe {
+        MessageBoxW(
+            std::ptr::null_mut(),
+            wide_text.as_ptr(),
+            title.as_ptr(),
+            winapi::um::winuser::MB_OK,
+        );
+    }
+}
+
+#[derive(Default, Debug, Clone)]
+pub struct ActiveWindowInfo {
+    pub window_name: Option<String>,
+    pub exe_path: Option<PathBuf>,
+}
+pub fn get_active_window_info() -> ActiveWindowInfo {
+    let mut window_name: Option<String> = None;
+    let mut exe_path: Option<PathBuf> = None;
+    unsafe {
+        let fg_hwnd = winapi::um::winuser::GetForegroundWindow();
+        if !fg_hwnd.is_null() {
+            let mut process_id: u32 = 0;
+            let thread_id = winapi::um::winuser::GetWindowThreadProcessId(
+                fg_hwnd,
+                std::ptr::addr_of_mut!(process_id),
+            );
+            if thread_id != 0 {
+                let mut buffer: [u16; 1024] = [0 as u16; 1024];
+                let mut buffer_capacity: u32 = 1023;
+                let text_len = GetWindowTextW(fg_hwnd, buffer.as_mut_ptr(), buffer_capacity as i32);
+                if text_len > 0 {
+                    let sub_slice = &buffer[..text_len as usize];
+                    window_name = Some(wide_slice_to_str(sub_slice));
+                }
+
+                let p_handle =
+                    OpenProcess(winapi::um::winnt::PROCESS_QUERY_INFORMATION, 0, process_id);
+                let success = winapi::um::winbase::QueryFullProcessImageNameW(
+                    p_handle,
+                    0,
+                    buffer.as_mut_ptr(),
+                    std::ptr::addr_of_mut!(buffer_capacity),
+                );
+                if success != 0 {
+                    let sub_slice = &buffer[..buffer_capacity as usize];
+                    exe_path = Some(PathBuf::from(wide_slice_to_str(sub_slice)));
+                }
+            }
+        }
+    }
+
+    ActiveWindowInfo {
+        window_name,
+        exe_path,
+    }
 }

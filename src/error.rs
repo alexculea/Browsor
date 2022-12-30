@@ -1,7 +1,7 @@
 #[allow(dead_code)]
 pub type BSResult<T> = std::result::Result<T, BSError>;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct BSError {
     msg: String,
 }
@@ -57,12 +57,7 @@ impl From<rusqlite::Error> for BSError {
     }
 }
 
-impl<T> From<crossbeam_channel::SendError<T>> for BSError {
-    fn from(error: crossbeam_channel::SendError<T>) -> Self {
-        let error_message = format!("Crossbeam SendError:- {}", error.to_string());
-        BSError::new(error_message.as_str())
-    }
-}
+
 
 // impl From<std::io::Result<T>> for BSResult<T> {
 //     fn from(result: std::io::Result<T>) -> Self {
