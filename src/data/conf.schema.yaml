@@ -22,5 +22,8 @@ properties:
   default_url:
     type: string
     description: 'The default URL to open when a certain URL is not specified. Default: about:home'
+  statistics:
+    type: boolean
+    description: 'The default URL to open when a certain URL is not specified. Default: about:home'
 required:
   - version

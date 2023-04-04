@@ -38,6 +38,14 @@ pub struct Browser {
     pub version: VersionInfo,
 }
 
+impl Browser { 
+    pub fn get_hash(&self) -> String {
+        let mut hasher = DefaultHasher::new();
+        self.exe_path.hash(&mut hasher);
+        hasher.finish().to_string()
+    }
+}
+
 impl Default for Browser {
     fn default() -> Browser {
         Browser {

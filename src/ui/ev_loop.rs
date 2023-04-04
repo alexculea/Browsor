@@ -1,110 +1,177 @@
+use std::cell::RefCell;
 use std::rc::Rc;
 
-use winit::event_loop::{EventLoop, ControlFlow, EventLoopWindowTarget};
 use winit::event::{Event, WindowEvent};
+use winit::event_loop::{ControlFlow, EventLoop, EventLoopBuilder, EventLoopWindowTarget};
+
+use winapi::um::processthreadsapi::{TerminateProcess, GetCurrentProcess};
 
 use crate::os::sys_browsers::Browser;
 
 pub enum UserEvent {
-  Close
+    Close,
 }
 
 pub fn make_ev_loop() -> EventLoop<UserEvent> {
-  EventLoop::with_user_event()
+    EventLoopBuilder::with_user_event().build()
 }
 
 pub fn make_runner<UIType>(
-  url: Rc<String>,
-  window: winit::window::Window,
-  ui: UIType,
+    url: Rc<String>,
+    window: winit::window::Window,
+    ui_ptr: Rc<RefCell<UIType>>,
+    worker: Option<Rc<RefCell<crate::data::Statistics>>>,
 ) -> impl FnMut(Event<UserEvent>, &EventLoopWindowTarget<UserEvent>, &mut ControlFlow) -> ()
 where
-  UIType: crate::ui::UserInterface<Browser>
+    UIType: crate::ui::UserInterface<Browser>,
 {
-  move |event: Event<UserEvent>, _, control_flow: &mut ControlFlow| {
-    *control_flow = ControlFlow::Wait;
-    match event {
-        Event::UserEvent(_) => {
-            *control_flow = ControlFlow::Exit;
-        }
-        Event::WindowEvent {
-            event: WindowEvent::CloseRequested,
-            window_id,
-        } if window_id == window.id() => {
-            *control_flow = ControlFlow::Exit;
-        }
-        Event::WindowEvent {
-            event: WindowEvent::Resized(_size),
-            ..
-        } => {
-            ui.update_layout_size(&window, &_size).unwrap();
-        }
-        Event::WindowEvent {
-            event: WindowEvent::KeyboardInput { input, .. },
-            ..
-        } if input.state == winit::event::ElementState::Pressed => {
-            use winit::event::VirtualKeyCode;
-            let key = input
-                .virtual_keycode
-                .expect("Couldn't identify pressed key.");
-            let length = ui
-                .get_list_length()
-                .expect("Couldn't determine list length")
-                - 1;
-            let mut current_index = ui
-                .get_selected_list_item_index()
-                .expect("Couldn't determine currently selected item");
-  
-            match key {
-                VirtualKeyCode::Down => {
-                    current_index = (current_index + 1).clamp(0, length as isize);
-                    ui.select_list_item_by_index(current_index)
-                        .expect("Couldn't select next item.");
-                }
-                VirtualKeyCode::Up => {
-                    current_index = (current_index - 1).clamp(0, length as isize);
-                    ui.select_list_item_by_index(current_index)
-                        .expect("Couldn't select previous item.");
-                }
-                VirtualKeyCode::NumpadEnter | VirtualKeyCode::Return => {
-                    let item = ui.get_selected_list_item().ok().unwrap().unwrap();
-                    let browser = item.state.as_ref();
-                    crate::os::util::spawn_browser_process(&browser.exe_path, browser.arguments.clone(), &url);
-                    
-                    *control_flow = ControlFlow::Exit;
-                }
-                VirtualKeyCode::Escape => {
-                    *control_flow = ControlFlow::Exit;
-                }
-                vkey => {
-                    if let Some(pos) = list_number_from_vkey(vkey) {
-                        ui.select_list_item_by_index(pos.clamp(0, length as isize))
-                            .expect("Couldn't select specific item number");
-                    };
+    move |event: Event<UserEvent>, _, control_flow: &mut ControlFlow| {
+        *control_flow = ControlFlow::WaitUntil(
+            std::time::Instant::now() + std::time::Duration::from_millis(10),
+        );
+
+        match event {
+            Event::UserEvent(_) => {
+                *control_flow = ControlFlow::Exit;
+            }
+            Event::WindowEvent {
+                event: WindowEvent::CloseRequested,
+                window_id,
+            } if window_id == window.id() => {
+                *control_flow = ControlFlow::Exit;
+            }
+            Event::WindowEvent {
+                event: WindowEvent::Resized(_size),
+                ..
+            } => {
+                let ui = ui_ptr.borrow();
+                ui.update_layout_size(&window, &_size).unwrap();
+            }
+            Event::WindowEvent {
+                event: WindowEvent::KeyboardInput { input, .. },
+                ..
+            } if input.state == winit::event::ElementState::Pressed => {
+                use winit::event::VirtualKeyCode;
+                let ui = ui_ptr.borrow();
+                let key = input
+                    .virtual_keycode
+                    .expect("Couldn't identify pressed key.");
+                let length = ui
+                    .get_list_length()
+                    .expect("Couldn't determine list length")
+                    - 1;
+                let mut current_index = ui
+                    .get_selected_list_item_index()
+                    .expect("Couldn't determine currently selected item");
+
+                match key {
+                    VirtualKeyCode::Down => {
+                        current_index = (current_index + 1).clamp(0, length as isize);
+                        ui.select_list_item_by_index(current_index)
+                            .expect("Couldn't select next item.");
+                    }
+                    VirtualKeyCode::Up => {
+                        current_index = (current_index - 1).clamp(0, length as isize);
+                        ui.select_list_item_by_index(current_index)
+                            .expect("Couldn't select previous item.");
+                    }
+                    VirtualKeyCode::NumpadEnter | VirtualKeyCode::Return => {
+                        let item = ui.get_selected_list_item().ok().unwrap().unwrap();
+                        let browser = item.state.as_ref();
+                        crate::os::util::spawn_browser_process(
+                            &browser.exe_path,
+                            browser.arguments.clone(),
+                            &url,
+                        );
+
+                        *control_flow = ControlFlow::Exit;
+                    }
+                    VirtualKeyCode::Space => {
+                        if let Some(item) = ui.prediction_get_state().iter().take(1).last() {
+                            let browser = item.state.as_ref();
+                            crate::os::util::spawn_browser_process(
+                                &browser.exe_path,
+                                browser.arguments.clone(),
+                                &url,
+                            );
+                            *control_flow = ControlFlow::Exit;
+                        }
+                    }
+                    VirtualKeyCode::Back => {
+                        if let Some(item) = ui.prediction_get_state().iter().take(2).last() {
+                            let browser = item.state.as_ref();
+                            crate::os::util::spawn_browser_process(
+                                &browser.exe_path,
+                                browser.arguments.clone(),
+                                &url,
+                            );
+                            *control_flow = ControlFlow::Exit;
+                        }
+                    }
+                    VirtualKeyCode::Escape => {
+                        *control_flow = ControlFlow::Exit;
+                    }
+                    vkey => {
+                        if let Some(pos) = list_number_from_vkey(vkey) {
+                            ui.select_list_item_by_index(pos.clamp(0, length as isize))
+                                .expect("Couldn't select specific item number");
+                        };
+                    }
                 }
             }
+            _ => (),
         }
-        _ => (),
-    }
 
-    if *control_flow == ControlFlow::Exit {
-      ui.destroy();
+        if *control_flow == ControlFlow::Exit {
+            window.set_visible(false);
+            let ui = ui_ptr.borrow();
+            ui.destroy();
+        }
+
+        if let Some(worker_ref) = &worker {
+            let mut statistics = worker_ref.borrow_mut();
+            statistics.tick();
+
+            if *control_flow == ControlFlow::Exit {
+                let max_time_wait = std::time::Duration::from_millis(15_000);
+                let mut time_waited = std::time::Duration::from_millis(0);
+                statistics.stop();
+                // TODO: Refactor to use Condvar
+                while !statistics.is_finished() {
+                    let dur = std::time::Duration::from_millis(10);
+                    std::thread::sleep(dur);
+                    time_waited += dur;
+                    if max_time_wait < time_waited {
+                        println!("Max time waiting for bg thread reached!");
+                        break;
+                    }
+                }
+                
+                println!("Exited worker ref waiting procedure.");
+                *control_flow = ControlFlow::Exit
+            }
+        }
+
+        if *control_flow == ControlFlow::Exit {
+            // TODO: Investigate why the process hangs when returning control to winit
+            // or when existing gracefully with ExitProcess
+            unsafe { TerminateProcess(GetCurrentProcess(), 0); }
+        }
     }
-  }
 }
 
 fn list_number_from_vkey(vkey: winit::event::VirtualKeyCode) -> Option<isize> {
-  use winit::event::VirtualKeyCode;
-  match vkey {
-      VirtualKeyCode::Key1 | VirtualKeyCode::Numpad1 => Some(0),
-      VirtualKeyCode::Key2 | VirtualKeyCode::Numpad2 => Some(1),
-      VirtualKeyCode::Key3 | VirtualKeyCode::Numpad3 => Some(2),
-      VirtualKeyCode::Key4 | VirtualKeyCode::Numpad4 => Some(3),
-      VirtualKeyCode::Key5 | VirtualKeyCode::Numpad5 => Some(4),
-      VirtualKeyCode::Key6 | VirtualKeyCode::Numpad6 => Some(5),
-      VirtualKeyCode::Key7 | VirtualKeyCode::Numpad7 => Some(6),
-      VirtualKeyCode::Key8 | VirtualKeyCode::Numpad8 => Some(7),
-      VirtualKeyCode::Key9 | VirtualKeyCode::Numpad9 => Some(8),
-      _ => None,
-  }
+    use winit::event::VirtualKeyCode;
+    match vkey {
+        VirtualKeyCode::Key1 | VirtualKeyCode::Numpad1 => Some(0),
+        VirtualKeyCode::Key2 | VirtualKeyCode::Numpad2 => Some(1),
+        VirtualKeyCode::Key3 | VirtualKeyCode::Numpad3 => Some(2),
+        VirtualKeyCode::Key4 | VirtualKeyCode::Numpad4 => Some(3),
+        VirtualKeyCode::Key5 | VirtualKeyCode::Numpad5 => Some(4),
+        VirtualKeyCode::Key6 | VirtualKeyCode::Numpad6 => Some(5),
+        VirtualKeyCode::Key7 | VirtualKeyCode::Numpad7 => Some(6),
+        VirtualKeyCode::Key8 | VirtualKeyCode::Numpad8 => Some(7),
+        VirtualKeyCode::Key9 | VirtualKeyCode::Numpad9 => Some(8),
+        _ => None,
+    }
 }

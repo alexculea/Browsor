@@ -32,6 +32,9 @@ pub trait UserInterface<T: Clone> {
     fn get_selected_list_item_index(&self) -> BSResult<isize>;
     fn get_selected_list_item(&self) -> BSResult<Option<ListItem<T>>>;
     fn get_list_length(&self) -> BSResult<usize>;
+    fn prediction_set_is_loading(&self, is_loading: bool) -> BSResult<()>;
+    fn prediction_set_state(&mut self, list: &[ListItem<T>], duration: &str) -> BSResult<()>;
+    fn prediction_get_state(&self) -> &[ListItem<T>];
 
     fn on_list_item_selected(
         &self,
