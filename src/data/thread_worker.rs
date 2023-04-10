@@ -1,7 +1,8 @@
+#![allow(dead_code)]
+
 use std::{thread::JoinHandle, sync::atomic::AtomicBool};
 use ::std::{
     sync::{mpsc, Arc},
-    thread,
 };
 
 /// Thread worker utility class facilitating ergonomic communication with background thread workers

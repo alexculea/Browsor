@@ -1,15 +1,14 @@
-use std::ffi::{OsStr, OsString};
-use std::path::{Path, PathBuf};
+use std::ffi::OsStr;
+use std::path::PathBuf;
 
 use raw_window_handle::HasRawWindowHandle;
 use simple_error::SimpleResult as Result;
-use winapi::um::libloaderapi::{GetModuleHandleW, FindResourceExW};
 use winapi::um::processthreadsapi::OpenProcess;
 
 use crate::error::*;
 use winapi::ctypes::c_void;
 use winapi::um::stringapiset::MultiByteToWideChar;
-use winapi::um::winuser::{GetWindowTextW, MessageBoxW, MAKEINTRESOURCEW};
+use winapi::um::winuser::{GetWindowTextW, MessageBoxW};
 
 pub fn get_hwnd(window: &winit::window::Window) -> winapi::shared::windef::HWND {
     match window.raw_window_handle() {
@@ -21,7 +20,6 @@ pub fn get_hwnd(window: &winit::window::Window) -> winapi::shared::windef::HWND 
 }
 
 pub fn str_to_wide(string: &str) -> Vec<u16> {
-    use std::ffi::OsStr;
     use std::iter::once;
     use std::os::windows::ffi::OsStrExt;
 

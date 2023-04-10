@@ -12,7 +12,7 @@ mod os;
 mod ui;
 
 use core::cell::RefCell;
-use os::{ActiveWindowInfo, output_panic_text};
+use os::ActiveWindowInfo;
 use std::rc::Rc;
 use winit::window::WindowBuilder;
 
@@ -216,6 +216,4 @@ fn main() {
         ui_ptr.clone(),
         statistics_optional,
     ));
-
-    println!("This should never be shown.");
 }

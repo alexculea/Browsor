@@ -1,6 +1,5 @@
 use std::convert::TryInto;
 use std::mem::MaybeUninit;
-use std::ops::{Index, IndexMut};
 
 // For clarity purposes keep all WinRT imports under wrt::
 // winrt is a different crate dealing with types for calling the imported resources
