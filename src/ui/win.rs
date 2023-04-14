@@ -1,5 +1,7 @@
+use std::cell::RefCell;
 use std::convert::TryInto;
 use std::mem::MaybeUninit;
+use std::rc::Rc;
 
 // For clarity purposes keep all WinRT imports under wrt::
 // winrt is a different crate dealing with types for calling the imported resources
@@ -114,6 +116,7 @@ pub struct UIState<T: Clone> {
     pub container: wrt::Panel,
     pub theme: Theme,
     pub window: Option<Window>,
+    pub browser_selected_handler: Option<Rc<RefCell<Box<dyn FnMut(&str) -> ()>>>>,
 }
 
 const LIST_CONTROL_NAME: &str = "browserList";
@@ -136,6 +139,7 @@ impl<ItemStateType: Clone> UserInterface<ItemStateType> for BrowserSelectorUI<It
             container: wrt::Panel::default(),
             theme: create_theme()?,
             window: Default::default(),
+            browser_selected_handler: None,
         };
 
         Ok(BrowserSelectorUI { state })
@@ -270,10 +274,12 @@ impl<ItemStateType: Clone> UserInterface<ItemStateType> for BrowserSelectorUI<It
         Ok(Some(cloned_item))
     }
 
-    fn on_list_item_selected(
-        &self,
-        mut event_handler: impl FnMut(&str) -> () + 'static,
+    fn on_browser_selected(
+        &mut self,
+        event_handler: impl FnMut(&str) -> () + 'static,
     ) -> BSResult<()> {
+        self.state.browser_selected_handler = Some(Rc::new(RefCell::new(Box::new(event_handler))));
+        let handler_ptr = self.state.browser_selected_handler.as_ref().unwrap().clone();
         let list_control: wrt::ListView =
             recursive_find_child_by_tag(&self.state.container, LIST_CONTROL_NAME)
                 .unwrap()
@@ -285,13 +291,22 @@ impl<ItemStateType: Clone> UserInterface<ItemStateType> for BrowserSelectorUI<It
                 let item_tag = ui_element_get_tag_as_string(&event.clicked_item()?)
                     .unwrap()
                     .unwrap();
-                (event_handler)(item_tag.as_str());
+
+                
+                let mut ev_handler = handler_ptr.as_ref().borrow_mut();
+                (ev_handler)(item_tag.as_str());
 
                 Ok(())
             },
         ))?;
 
         Ok(())
+    }
+
+    fn trigger_browser_selected(&self, uuid: &str) {
+        if let Some(handler_ptr) = self.state.browser_selected_handler.as_ref() {
+            handler_ptr.as_ref().borrow_mut()(uuid);
+        }
     }
 
     fn get_list_length(&self) -> BSResult<usize> {

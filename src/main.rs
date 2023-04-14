@@ -157,8 +157,8 @@ fn main() {
     let src_app_clone = src_app_opt.clone();
 
     {
-        let ui = ui_ptr.borrow();
-        ui.on_list_item_selected(move |uuid| {
+        let mut ui = ui_ptr.borrow_mut();
+        ui.on_browser_selected(move |uuid| {
             let source = src_app_clone.clone().unwrap_or_default().exe_path;
             list_items
                 .iter()
@@ -204,7 +204,6 @@ fn main() {
 
     let worker = statistics_optional.clone();
     event_loop.run(ui::ev_loop::make_runner(
-        target_url,
         ui_ptr.clone(),
         move |control_flow| {
             if let Some(worker_ref) = &worker {

@@ -41,10 +41,11 @@ pub trait UserInterface<T: Clone> {
     fn prediction_set_state(&mut self, list: &[ListItem<T>], duration: &str) -> BSResult<()>;
     fn prediction_get_state(&self) -> &[ListItem<T>];
 
-    fn on_list_item_selected(
-        &self,
+    fn on_browser_selected(
+        &mut self,
         event_handler: impl FnMut(&str) -> () + 'static,
     ) -> BSResult<()>;
+    fn trigger_browser_selected(&self, uuid: &str);
 
     fn destroy(&self);
 }

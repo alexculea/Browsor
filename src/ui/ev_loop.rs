@@ -17,7 +17,6 @@ pub fn make_ev_loop() -> EventLoop<UserEvent> {
 }
 
 pub fn make_runner<UIType>(
-    url: Rc<String>,
     ui_ptr: Rc<RefCell<UIType>>,
     mut delegate: impl FnMut(&mut ControlFlow) -> (),
 ) -> impl FnMut(Event<UserEvent>, &EventLoopWindowTarget<UserEvent>, &mut ControlFlow) -> ()
@@ -29,12 +28,12 @@ where
             std::time::Instant::now() + std::time::Duration::from_millis(10),
         );
 
-        handle_ui_event(event, control_flow, ui_ptr.clone(), url.clone());
+        handle_ui_event(event, control_flow, ui_ptr.clone());
         delegate(control_flow);
     }
 }
 
-pub fn handle_ui_event<UIType>(event: Event<UserEvent>, control_flow: &mut ControlFlow, ui_ptr: Rc<RefCell<UIType>>, url: Rc<String>)
+pub fn handle_ui_event<UIType>(event: Event<UserEvent>, control_flow: &mut ControlFlow, ui_ptr: Rc<RefCell<UIType>>)
 where
     UIType: crate::ui::UserInterface<Browser>,
 {
@@ -87,35 +86,16 @@ where
                 }
                 VirtualKeyCode::NumpadEnter | VirtualKeyCode::Return => {
                     let item = ui.get_selected_list_item().ok().unwrap().unwrap();
-                    let browser = item.state.as_ref();
-                    crate::os::util::spawn_browser_process(
-                        &browser.exe_path,
-                        browser.arguments.clone(),
-                        &url,
-                    );
-
-                    *control_flow = ControlFlow::Exit;
+                    ui.trigger_browser_selected(&item.uuid);
                 }
                 VirtualKeyCode::Space => {
                     if let Some(item) = ui.prediction_get_state().iter().take(1).last() {
-                        let browser = item.state.as_ref();
-                        crate::os::util::spawn_browser_process(
-                            &browser.exe_path,
-                            browser.arguments.clone(),
-                            &url,
-                        );
-                        *control_flow = ControlFlow::Exit;
+                        ui.trigger_browser_selected(&item.uuid);
                     }
                 }
                 VirtualKeyCode::Back => {
                     if let Some(item) = ui.prediction_get_state().iter().take(2).last() {
-                        let browser = item.state.as_ref();
-                        crate::os::util::spawn_browser_process(
-                            &browser.exe_path,
-                            browser.arguments.clone(),
-                            &url,
-                        );
-                        *control_flow = ControlFlow::Exit;
+                        ui.trigger_browser_selected(&item.uuid);
                     }
                 }
                 VirtualKeyCode::Escape => {
