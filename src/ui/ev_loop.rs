@@ -4,7 +4,7 @@ use std::rc::Rc;
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop, EventLoopBuilder, EventLoopWindowTarget};
 
-use winapi::um::processthreadsapi::{TerminateProcess, GetCurrentProcess};
+
 
 use crate::os::sys_browsers::Browser;
 
@@ -20,7 +20,7 @@ pub fn make_runner<UIType>(
     url: Rc<String>,
     window: winit::window::Window,
     ui_ptr: Rc<RefCell<UIType>>,
-    worker: Option<Rc<RefCell<crate::data::Statistics>>>,
+    mut delegate: impl FnMut(&mut ControlFlow) -> (),
 ) -> impl FnMut(Event<UserEvent>, &EventLoopWindowTarget<UserEvent>, &mut ControlFlow) -> ()
 where
     UIType: crate::ui::UserInterface<Browser>,
@@ -31,40 +31,7 @@ where
         );
 
         handle_ui_event(event, control_flow, &window, ui_ptr.clone(), url.clone());
-
-        handle_statistics(worker.clone(), control_flow);
-    }
-}
-
-fn handle_statistics(worker: Option<Rc<RefCell<crate::data::Statistics>>>, control_flow: &mut ControlFlow) {
-    if let Some(worker_ref) = &worker {
-        let mut statistics = worker_ref.borrow_mut();
-        statistics.tick();
-
-        if *control_flow == ControlFlow::Exit {
-            let max_time_wait = std::time::Duration::from_millis(15_000);
-            let mut time_waited = std::time::Duration::from_millis(0);
-            statistics.stop();
-            // TODO: Refactor to use Condvar
-            while !statistics.is_finished() {
-                let dur = std::time::Duration::from_millis(10);
-                std::thread::sleep(dur);
-                time_waited += dur;
-                if max_time_wait < time_waited {
-                    println!("Max time waiting for bg thread reached!");
-                    break;
-                }
-            }
-        
-            println!("Exited worker ref waiting procedure.");
-            *control_flow = ControlFlow::Exit
-        }
-    }
-
-    if *control_flow == ControlFlow::Exit {
-        // TODO: Investigate why the process hangs when returning control to winit
-        // or when existing gracefully with ExitProcess
-        unsafe { TerminateProcess(GetCurrentProcess(), 0); }
+        delegate(control_flow);
     }
 }
 

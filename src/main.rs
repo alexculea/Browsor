@@ -15,6 +15,8 @@ use core::cell::RefCell;
 use os::ActiveWindowInfo;
 use std::rc::Rc;
 use winit::window::WindowBuilder;
+use winit::event_loop::ControlFlow;
+use winapi::um::processthreadsapi::{TerminateProcess, GetCurrentProcess};
 
 use crate::os::sys_browsers;
 use crate::os::sys_browsers::Browser;
@@ -208,12 +210,42 @@ fn main() {
         .expect("Cannot set on click event handler.");
     }
 
+    let worker = statistics_optional.clone();
     window.set_visible(true);
-    // drop(ui); // doesn't actually destroy the UI, just releases the borrow_mut()
     event_loop.run(ui::ev_loop::make_runner(
         target_url,
         window,
         ui_ptr.clone(),
-        statistics_optional,
+        move | control_flow | {
+            if let Some(worker_ref) = &worker {
+                let mut statistics = worker_ref.borrow_mut();
+                statistics.tick();
+        
+                if *control_flow == ControlFlow::Exit {
+                    let max_time_wait = std::time::Duration::from_millis(15_000);
+                    let mut time_waited = std::time::Duration::from_millis(0);
+                    statistics.stop();
+                    // TODO: Refactor to use Condvar
+                    while !statistics.is_finished() {
+                        let dur = std::time::Duration::from_millis(10);
+                        std::thread::sleep(dur);
+                        time_waited += dur;
+                        if max_time_wait < time_waited {
+                            println!("Max time waiting for bg thread reached!");
+                            break;
+                        }
+                    }
+                
+                    println!("Exited worker ref waiting procedure.");
+                    *control_flow = ControlFlow::Exit
+                }
+            }
+        
+            if *control_flow == ControlFlow::Exit {
+                // TODO: Investigate why the process hangs when returning control to winit
+                // or when existing gracefully with ExitProcess
+                unsafe { TerminateProcess(GetCurrentProcess(), 0); }
+            }
+        }
     ));
 }
