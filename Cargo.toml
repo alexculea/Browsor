@@ -1,5 +1,5 @@
 [package]
-name = "browser-selector"
+name = "Browsor"
 version = "0.3.0"
 authors = ["Alex Culea <16594531+alexculea@users.noreply.github.com>"]
 edition = "2021"

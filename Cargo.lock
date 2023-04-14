@@ -3,6 +3,31 @@
 version = 3
 
 [[package]]
+name = "Browsor"
+version = "0.3.0"
+dependencies = [
+ "bindings",
+ "chrono",
+ "embed-resource",
+ "jsonschema",
+ "raw-window-handle 0.4.3",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "serde_rusqlite",
+ "serde_yaml",
+ "simple-error",
+ "structmap",
+ "structmap-derive",
+ "triple_accel",
+ "url",
+ "winapi",
+ "winit",
+ "winreg 0.9.0",
+ "winrt",
+]
+
+[[package]]
 name = "adler"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -127,31 +152,6 @@ name = "block"
 version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0d8c1fef690941d3e7788d328517591fecc684c084084702d6ff1641e993699a"
-
-[[package]]
-name = "browser-selector"
-version = "0.3.0"
-dependencies = [
- "bindings",
- "chrono",
- "embed-resource",
- "jsonschema",
- "raw-window-handle 0.4.3",
- "rusqlite",
- "serde",
- "serde_json",
- "serde_rusqlite",
- "serde_yaml",
- "simple-error",
- "structmap",
- "structmap-derive",
- "triple_accel",
- "url",
- "winapi",
- "winit",
- "winreg 0.9.0",
- "winrt",
-]
 
 [[package]]
 name = "bumpalo"

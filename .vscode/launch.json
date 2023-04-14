@@ -5,8 +5,8 @@
             "name": "Debug (C++ VS)",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/target/debug/browser-selector.exe",
-            "args": ["https://www.google.com"],
+            "program": "${workspaceFolder}/target/debug/Browsor.exe",
+            "args": ["https://github.com/alexculea/Browsor"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [],
@@ -16,8 +16,8 @@
             "name": "Debug (LLDB)",
             "type": "lldb",
             "request": "launch",
-            "program": "${workspaceFolder}/target/debug/browser-selector.exe",
-            "args": ["https://www.google.com"],
+            "program": "${workspaceFolder}/target/debug/Browsor.exe",
+            "args": ["https://github.com/alexculea/Browsor"],
             "cwd": "${workspaceFolder}"
         }
     ]

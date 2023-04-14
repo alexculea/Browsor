@@ -1,4 +1,4 @@
-# Browser Selector - desktop app for Windows 10
+# Browsor: browser selector desktop app for Windows 10
 
 A tool that registers as the default system browser prompting you to select one of the installed ones to open the URL. Works whenever you open a link from any desktop app.
 
