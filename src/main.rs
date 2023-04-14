@@ -14,9 +14,8 @@ mod ui;
 use core::cell::RefCell;
 use os::ActiveWindowInfo;
 use std::rc::Rc;
-use winit::window::WindowBuilder;
+use winapi::um::processthreadsapi::{GetCurrentProcess, TerminateProcess};
 use winit::event_loop::ControlFlow;
-use winapi::um::processthreadsapi::{TerminateProcess, GetCurrentProcess};
 
 use crate::os::sys_browsers;
 use crate::os::sys_browsers::Browser;
@@ -30,11 +29,7 @@ fn main() {
     let config = conf::read_config().unwrap_or_default();
     let app_name = env!("CARGO_PKG_NAME");
     let app_version = env!("CARGO_PKG_VERSION");
-    let target_url = Rc::new(
-        std::env::args()
-            .nth(1)
-            .unwrap_or(config.default_url),
-    );
+    let target_url = Rc::new(std::env::args().nth(1).unwrap_or(config.default_url));
     let mut statistics_optional: Option<Rc<RefCell<data::Statistics>>> = None;
 
     let ui_ptr = Rc::new(RefCell::new(
@@ -63,25 +58,12 @@ fn main() {
         });
     }
 
-    let window = WindowBuilder::new()
-        .with_title(format!("{} {}", app_name, app_version))
-        .with_decorations(true)
-        .with_always_on_top(true)
-        .with_inner_size(winit::dpi::LogicalSize {
-            height: 400 as i16,
-            width: 400 as i16,
-        })
-        .with_resizable(false)
-        .with_visible(false)
-        .build(&event_loop)
-        .expect("Failed to create the main window");
-
     {
         let mut ui = ui_ptr.borrow_mut();
-        ui.create(&window)
-            .expect("Failed to initialize WinUI XAML.");
+        let title = format!("{} {}", app_name, app_version);
+        ui.create(&title, &event_loop).expect("Failed to create main UI.");
     }
-    
+
     *browsers = sys_browsers::read_system_browsers_sync().expect("Could not read browser list");
 
     let selections = browsers
@@ -96,7 +78,10 @@ fn main() {
         .collect();
 
     if let Some(stats) = statistics_optional.clone() {
-        { let ui = ui_ptr.borrow(); ui.prediction_set_is_loading(true).unwrap(); }
+        {
+            let ui = ui_ptr.borrow();
+            ui.prediction_set_is_loading(true).unwrap();
+        }
         let mut statistics = stats.borrow_mut();
         statistics.update_selections(selections, |res| {
             if res.is_err() {
@@ -171,8 +156,8 @@ fn main() {
     let statistics_ref = statistics_optional.clone();
     let src_app_clone = src_app_opt.clone();
 
-    { 
-        let ui = ui_ptr.borrow(); 
+    {
+        let ui = ui_ptr.borrow();
         ui.on_list_item_selected(move |uuid| {
             let source = src_app_clone.clone().unwrap_or_default().exe_path;
             list_items
@@ -195,8 +180,10 @@ fn main() {
                             &browser.exe_path,
                             |res| {
                                 if res.is_err() {
-                                    let msg =
-                                        format!("Failed saving choice.\nError:{}", res.err().unwrap());
+                                    let msg = format!(
+                                        "Failed saving choice.\nError:{}",
+                                        res.err().unwrap()
+                                    );
                                     crate::os::output_panic_text(msg.to_string());
                                 }
                             },
@@ -210,17 +197,20 @@ fn main() {
         .expect("Cannot set on click event handler.");
     }
 
+    {
+        let ui = ui_ptr.borrow();
+        ui.set_main_window_visible(true)
+    }
+
     let worker = statistics_optional.clone();
-    window.set_visible(true);
     event_loop.run(ui::ev_loop::make_runner(
         target_url,
-        window,
         ui_ptr.clone(),
-        move | control_flow | {
+        move |control_flow| {
             if let Some(worker_ref) = &worker {
                 let mut statistics = worker_ref.borrow_mut();
                 statistics.tick();
-        
+
                 if *control_flow == ControlFlow::Exit {
                     let max_time_wait = std::time::Duration::from_millis(15_000);
                     let mut time_waited = std::time::Duration::from_millis(0);
@@ -235,17 +225,19 @@ fn main() {
                             break;
                         }
                     }
-                
+
                     println!("Exited worker ref waiting procedure.");
                     *control_flow = ControlFlow::Exit
                 }
             }
-        
+
             if *control_flow == ControlFlow::Exit {
                 // TODO: Investigate why the process hangs when returning control to winit
                 // or when existing gracefully with ExitProcess
-                unsafe { TerminateProcess(GetCurrentProcess(), 0); }
+                unsafe {
+                    TerminateProcess(GetCurrentProcess(), 0);
+                }
             }
-        }
+        },
     ));
 }

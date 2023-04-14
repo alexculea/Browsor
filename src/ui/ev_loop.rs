@@ -18,7 +18,6 @@ pub fn make_ev_loop() -> EventLoop<UserEvent> {
 
 pub fn make_runner<UIType>(
     url: Rc<String>,
-    window: winit::window::Window,
     ui_ptr: Rc<RefCell<UIType>>,
     mut delegate: impl FnMut(&mut ControlFlow) -> (),
 ) -> impl FnMut(Event<UserEvent>, &EventLoopWindowTarget<UserEvent>, &mut ControlFlow) -> ()
@@ -30,15 +29,17 @@ where
             std::time::Instant::now() + std::time::Duration::from_millis(10),
         );
 
-        handle_ui_event(event, control_flow, &window, ui_ptr.clone(), url.clone());
+        handle_ui_event(event, control_flow, ui_ptr.clone(), url.clone());
         delegate(control_flow);
     }
 }
 
-pub fn handle_ui_event<UIType>(event: Event<UserEvent>, control_flow: &mut ControlFlow, window: &winit::window::Window, ui_ptr: Rc<RefCell<UIType>>, url: Rc<String>)
+pub fn handle_ui_event<UIType>(event: Event<UserEvent>, control_flow: &mut ControlFlow, ui_ptr: Rc<RefCell<UIType>>, url: Rc<String>)
 where
     UIType: crate::ui::UserInterface<Browser>,
 {
+    let main_window_id = { ui_ptr.borrow().get_window_id() };
+
     match event {
         Event::UserEvent(_) => {
             *control_flow = ControlFlow::Exit;
@@ -46,7 +47,7 @@ where
         Event::WindowEvent {
             event: WindowEvent::CloseRequested,
             window_id,
-        } if window_id == window.id() => {
+        } if window_id == main_window_id => {
             *control_flow = ControlFlow::Exit;
         }
         Event::WindowEvent {
@@ -54,7 +55,7 @@ where
             ..
         } => {
             let ui = ui_ptr.borrow();
-            ui.update_layout_size(window, &_size).unwrap();
+            ui.update_layout_size(&_size).unwrap();
         }
         Event::WindowEvent {
             event: WindowEvent::KeyboardInput { input, .. },
@@ -132,8 +133,8 @@ where
     }
 
     if *control_flow == ControlFlow::Exit {
-        window.set_visible(false);
         let ui = ui_ptr.borrow();
+        ui.set_main_window_visible(false);
         ui.destroy();
     }
 }

@@ -49,14 +49,17 @@ use crate::os::{as_u8_slice, get_hwnd};
 use crate::ui::windows_desktop_window_xaml_source::IDesktopWindowXamlSourceNative;
 
 use winit::dpi::PhysicalSize;
+use winit::event_loop::EventLoop;
 use winit::platform::windows::IconExtWindows;
-use winit::window::Window;
+use winit::window::{Window, WindowBuilder, WindowId};
+
 use winrt::ComInterface;
 
 use crate::ui::Image;
 use crate::ui::ListItem;
 use crate::ui::UserInterface;
 
+use super::ev_loop::UserEvent;
 pub struct BrowserSelectorUI<ItemStateType: Clone> {
     state: UIState<ItemStateType>,
 }
@@ -110,6 +113,7 @@ pub struct UIState<T: Clone> {
     pub predictions: Vec<crate::ui::ListItem<T>>,
     pub container: wrt::Panel,
     pub theme: Theme,
+    pub window: Option<Window>,
 }
 
 const LIST_CONTROL_NAME: &str = "browserList";
@@ -131,12 +135,26 @@ impl<ItemStateType: Clone> UserInterface<ItemStateType> for BrowserSelectorUI<It
             predictions: Vec::<ListItem<ItemStateType>>::new(),
             container: wrt::Panel::default(),
             theme: create_theme()?,
+            window: Default::default(),
         };
 
         Ok(BrowserSelectorUI { state })
     }
 
-    fn create(&mut self, window: &Window) -> BSResult<()> {
+    fn create(&mut self, title: &str, event_loop: &EventLoop<UserEvent>) -> BSResult<()> {
+        let window = WindowBuilder::new()
+            .with_title(title)
+            .with_decorations(true)
+            .with_always_on_top(true)
+            .with_inner_size(winit::dpi::LogicalSize {
+                height: 400 as i16,
+                width: 400 as i16,
+            })
+            .with_resizable(false)
+            .with_visible(false)
+            .build(&event_loop)
+            .expect("Failed to create the main window");
+
         let size = window.inner_size();
         self.state.xaml_isle.hwnd = attach_window_to_xaml(&window, &mut self.state.xaml_isle)?;
         update_xaml_island_size(&self.state.xaml_isle, size)?;
@@ -152,7 +170,7 @@ impl<ItemStateType: Clone> UserInterface<ItemStateType> for BrowserSelectorUI<It
             .set_content(ui_container.to_owned())?;
         self.state.container = ComInterface::query::<wrt::Panel>(&ui_container);
 
-        center_window_on_cursor_monitor(window)?;
+        center_window_on_cursor_monitor(&window)?;
         window.set_window_icon(Some(
             winit::window::Icon::from_resource(
                 1,
@@ -164,7 +182,17 @@ impl<ItemStateType: Clone> UserInterface<ItemStateType> for BrowserSelectorUI<It
             .unwrap(),
         ));
 
+        self.state.window = Some(window);
+
         Ok(())
+    }
+
+    fn get_window_id(&self) -> WindowId {
+        self.state.window.as_ref().expect("Mising main window.").id()
+    }
+
+    fn set_main_window_visible(&self, visible: bool) {
+        self.state.window.as_ref().expect("No main window. ui::create needs to be called.").set_visible(visible)
     }
 
     fn destroy(&self) {
@@ -172,7 +200,7 @@ impl<ItemStateType: Clone> UserInterface<ItemStateType> for BrowserSelectorUI<It
         self.state.xaml_isle.desktop_source.close();
     }
 
-    fn update_layout_size(&self, _: &Window, size: &PhysicalSize<u32>) -> BSResult<()> {
+    fn update_layout_size(&self, size: &PhysicalSize<u32>) -> BSResult<()> {
         update_xaml_island_size(&self.state.xaml_isle, *size)?;
 
         Ok(())

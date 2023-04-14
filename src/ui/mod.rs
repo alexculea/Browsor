@@ -4,7 +4,8 @@ pub mod ev_loop;
 
 use crate::error::BSResult;
 use winit::dpi::PhysicalSize;
-use winit::window::Window;
+use winit::event_loop::EventLoop;
+use winit::window::{WindowId};
 
 use std::rc::Rc;
 
@@ -15,17 +16,21 @@ use std::rc::Rc;
 pub type Image = bindings::windows::ui::xaml::controls::Image;
 #[cfg(target_os = "windows")]
 pub use win::BrowserSelectorUI;
+
+use self::ev_loop::UserEvent;
 #[cfg(target_os = "windows")]
 mod windows_desktop_window_xaml_source;
 
 pub trait UserInterface<T: Clone> {
     fn new() -> BSResult<BrowserSelectorUI<T>>;
-    fn create(&mut self, winit_wnd: &Window) -> BSResult<()>;
+    fn create(&mut self, window_title: &str, event_loop: &EventLoop<UserEvent>) -> BSResult<()>;
+    fn set_main_window_visible(&self, visible: bool);
+    fn get_window_id(&self) -> WindowId;
 
     fn set_list(&mut self, list: &[ListItem<T>]) -> BSResult<()>;
     fn set_url(&self, url: &str) -> BSResult<()>;
 
-    fn update_layout_size(&self, window: &Window, size: &PhysicalSize<u32>) -> BSResult<()>;
+    fn update_layout_size(&self, size: &PhysicalSize<u32>) -> BSResult<()>;
     fn load_image(path: &str) -> BSResult<Image>;
 
     fn select_list_item_by_index(&self, index: isize) -> BSResult<()>;
