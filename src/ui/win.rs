@@ -182,9 +182,9 @@ impl<ItemStateType: Clone> UserInterface<ItemStateType> for BrowserSelectorUI<It
         if let Some(ui_element) =
             recursive_find_child_by_tag(&self.state.container, LIST_CONTROL_NAME)?
         {
-            let listview = ComInterface::query::<wrt::ListView>(&ui_element);
+            let list_view: wrt::ListView = ComInterface::query(&ui_element);
             self.state.list = list.clone().to_vec();
-            set_listview_items(&listview, list, &self.state.theme)?;
+            set_listview_items(&list_view, list, &self.state.theme)?;
         }
 
         Ok(())
