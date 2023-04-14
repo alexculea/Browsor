@@ -24,6 +24,21 @@ pub struct Config {
     pub hide: Vec<ConfigHideBrowsers>,
 }
 
+impl Config {
+    pub fn browser_is_not_hidden(&self, name: &str, path: &str) -> bool {
+        let browser_is_hidden = self.hide.iter().fold(false, |_, conf_hide_item| {
+            let hide_by_path = !conf_hide_item.path.is_empty()
+                && path.contains(&conf_hide_item.path);
+            let hide_by_name =
+                !conf_hide_item.name.is_empty() && name.contains(&conf_hide_item.name);
+
+            hide_by_name || hide_by_path
+        });
+
+        !browser_is_hidden
+    }
+}
+
 impl Default for Config {
     fn default() -> Self {
         Config {

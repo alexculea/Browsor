@@ -3,12 +3,12 @@ use std::path::PathBuf;
 
 use raw_window_handle::HasRawWindowHandle;
 use simple_error::SimpleResult as Result;
-use winapi::um::processthreadsapi::OpenProcess;
 
 use crate::error::*;
 use winapi::ctypes::c_void;
 use winapi::um::stringapiset::MultiByteToWideChar;
 use winapi::um::winuser::{GetWindowTextW, MessageBoxW};
+use winapi::um::processthreadsapi::{OpenProcess, GetCurrentProcess, TerminateProcess};
 
 pub fn get_hwnd(window: &winit::window::Window) -> winapi::shared::windef::HWND {
     match window.raw_window_handle() {
@@ -211,5 +211,11 @@ pub fn get_active_window_info() -> ActiveWindowInfo {
     ActiveWindowInfo {
         window_name,
         exe_path,
+    }
+}
+
+pub fn terminate_current_process() {
+    unsafe {
+        TerminateProcess(GetCurrentProcess(), 0);
     }
 }
