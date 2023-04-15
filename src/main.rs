@@ -95,14 +95,8 @@ fn main() {
                     .iter()
                     .take(2)
                     .filter_map(|item: &data::SelectionEntity| {
-                        browsers.iter().fold(None, |_, browser| {
-                            if browser.get_hash().as_str()
-                                == item.path_hash.as_ref().unwrap().as_str()
-                            {
-                                Some(browser)
-                            } else {
-                                None
-                            }
+                        browsers.iter().find(|browser| {
+                            browser.get_hash().as_str() == item.path_hash.as_ref().unwrap().as_str()
                         })
                     })
                     .map(|browser| browser.try_into().unwrap()) // TODO: try_into() is expensive
