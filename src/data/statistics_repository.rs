@@ -268,8 +268,10 @@ impl StatisticsRepository {
         let choices_scores = choice_map.into_iter().fold(
             BTreeMap::<i64, usize>::new(),
             |mut map, (choice_id, (choice_count, choice_score))| {
-                let final_score = choice_score / choice_count as f64;
-                map.insert((final_score * 100_000_000.0) as i64 + choice_count as i64 , choice_id);
+                let final_score = (choice_score * 10.0) + choice_count as f64;
+                map.insert(final_score as i64 , choice_id);
+
+                println!("Choice: {}, count: {}, score: {}, final score: {}", choice_id, choice_count, choice_score, final_score);
                 map
             },
         );
