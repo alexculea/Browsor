@@ -10,43 +10,32 @@ A tool that registers as the default system browser prompting you to select one 
   - Test different browser versions, betas, development, etc
   - Choose everytime based on what web apps are known to work best on, such as Google services in Chrome
 
-## Installation (only manual for now) 
+## Installing from source
 Prerequisites: [Rust compiler](https://www.rust-lang.org/learn/get-started)
 
 ### 1. In any PowerShell terminal at the root of the repository, run:
 
-
 ```PowerShell
-# build exe
+# from the project root folder, run:
 cargo build --release
-
-# make install folder in %APPDATA% (note: works with any other location)
-mkdir $env:APPDATA\BrowserSelector 
-
-# copy exe and scripts to install folder
-cp .\target\release\browser-selector.exe $env:APPDATA\BrowserSelector
-cp .\scripts\windows\* $env:APPDATA\BrowserSelector
-
-
-# Starts an elevated terminal at install location
-Start-Process Powershell -Verb runAs -ArgumentList '-noexit -command cd $env:APPDATA\BrowserSelector'
-
+# Then copy the needed files in a temporary folder
+mkdir $env:TMP\Browsor
+cp .\target\release\Browsor.exe $env:TMP\Browsor\Browser.exe
+cp .\scripts\windows\* $env:TMP\Browsor
+# Start an elevated PowerShell terminal at the temp folder
+Start-Process Powershell -Verb runAs -ArgumentList '-noexit -command cd $env:TMP\Browsor'
 ```
-
 Switch to the newly opened **admin powershell** for the rest of the commands
 
 ```Powershell
 # Allow running unsigned powershell scripts (https:/go.microsoft.com/fwlink/?LinkID=135170)
 Set-ExecutionPolicy -ExecutionPolicy Unrestricted
-
 # Runs the install
-.\install.ps
-
+.\setup.ps1
 # For security, revert the policy
 Set-ExecutionPolicy -ExecutionPolicy Default
-
-# To uninstall, run (needs elevated console):
-./install.ps --uninstall
+# To uninstall, just run again (needs elevated console):
+.\setup.ps1
 ```
 
 ### 2. Set default browser:
