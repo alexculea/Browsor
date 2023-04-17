@@ -50,7 +50,7 @@ pub fn migrate(conn: &mut rusqlite::Connection) -> BSResult<()> {
     .query_row([], |row| row.get::<_, i64>(0))
     .unwrap_or_else(|_| -1)
     .try_into()
-    .unwrap();
+    .expect("Failed reading last migration from DB");
   
   let mut migration_index = if last_migration_index < 0 { 0 } else { last_migration_index };
   let already_migrated = last_migration_index + 1;

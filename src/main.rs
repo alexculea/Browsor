@@ -35,7 +35,7 @@ fn main() {
     );
     let mut statistics_optional: Option<Rc<RefCell<data::Statistics>>> = None;
 
-    let ui_ptr = Rc::new(RefCell::new(
+    let ui_ref = Rc::new(RefCell::new(
         BrowserSelectorUI::new().expect("Failed to initialize COM or WinUI"),
     ));
     let event_loop = ui::ev_loop::make_ev_loop();
@@ -54,7 +54,7 @@ fn main() {
     }
 
     {
-        let mut ui = ui_ptr.borrow_mut();
+        let mut ui = ui_ref.borrow_mut();
         let title = format!("{} {}", app_name, app_version);
         ui.create(&title, &event_loop)
             .expect("Failed to create main UI.");
@@ -62,25 +62,27 @@ fn main() {
 
     *browsers = sys_browsers::read_system_browsers_sync().expect("Could not read browser list");
 
-    let selections = browsers
-        .iter()
-        .map(|browser| -> data::SelectionEntity {
-            data::SelectionEntity {
-                id: None,
-                path: Some(browser.exe_path.clone()),
-                path_hash: Some(browser.get_hash()),
-            }
-        })
-        .collect();
-
     if let Some(stats) = statistics_optional.clone() {
         let mut statistics = stats.borrow_mut();
         let source = src_app_opt.clone().unwrap_or_default().exe_path;
         let start_time = std::time::Instant::now();
         let browsers = browsers.clone();
-        let ui_ptr = Rc::clone(&ui_ptr);
+        let ui_ref = Rc::clone(&ui_ref);
+        let selections = browsers
+            .iter()
+            .map(|browser| -> data::SelectionEntity {
+                data::SelectionEntity {
+                    id: None,
+                    path: Some(browser.exe_path.clone()),
+                    path_hash: Some(browser.get_hash()),
+                }
+            })
+            .collect();
 
-        ui_ptr.borrow().prediction_set_is_loading(true).unwrap();
+        ui_ref
+            .borrow()
+            .prediction_set_is_loading(true)
+            .expect("Failed to set loading state for predictions.");
         statistics.update_selections(selections, |res| {
             res.expect(
                 "Failed updating the browsers available on the system to the statistics database.",
@@ -102,12 +104,15 @@ fn main() {
                     .map(|browser| browser.try_into().unwrap()) // TODO: try_into() is expensive
                     .collect::<Vec<ListItem<Browser>>>();
 
-                ui_ptr
+                ui_ref
                     .borrow_mut()
                     .prediction_set_state(&list.as_slice(), &duration_str)
-                    .unwrap();
+                    .expect("Failed setting predicted state for the prediction section");
             } else {
-                ui_ptr.borrow().prediction_set_is_loading(false).unwrap();
+                ui_ref
+                    .borrow()
+                    .prediction_set_is_loading(false)
+                    .expect("Failed stopping loading state for predictions.");
             }
         });
     }
@@ -119,7 +124,7 @@ fn main() {
         .collect();
 
     {
-        let mut ui = ui_ptr.borrow_mut();
+        let mut ui = ui_ref.borrow_mut();
         let open_url_clone = Rc::clone(&target_url);
         let ev_loop_proxy = event_loop.create_proxy();
         let statistics_ref = statistics_optional.clone();
@@ -161,12 +166,12 @@ fn main() {
 
         ui.set_main_window_visible(true);
     }
-    // end of scope is needed as it drops ui, releases the mutable strong ref from ui_ptr
+    // end of scope is needed as it drops ui, releases the mutable strong ref from ui_ref
     // to allow the UI to be borrowed in other places without panicking
 
     let worker = statistics_optional.clone();
     event_loop.run(ui::ev_loop::make_runner(
-        ui_ptr.clone(),
+        ui_ref.clone(),
         move |control_flow| {
             if let Some(worker_ref) = &worker {
                 let mut statistics = worker_ref.borrow_mut();
