@@ -4,8 +4,6 @@ use std::rc::Rc;
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop, EventLoopBuilder, EventLoopWindowTarget};
 
-
-
 use crate::os::sys_browsers::Browser;
 
 pub enum UserEvent {
@@ -17,7 +15,7 @@ pub fn make_ev_loop() -> EventLoop<UserEvent> {
 }
 
 pub fn make_runner<UIType>(
-    ui_ptr: Rc<RefCell<UIType>>,
+    ui_ref: Rc<RefCell<UIType>>,
     mut delegate: impl FnMut(&mut ControlFlow) -> (),
 ) -> impl FnMut(Event<UserEvent>, &EventLoopWindowTarget<UserEvent>, &mut ControlFlow) -> ()
 where
@@ -28,16 +26,16 @@ where
             std::time::Instant::now() + std::time::Duration::from_millis(10),
         );
 
-        handle_ui_event(event, control_flow, ui_ptr.clone());
+        handle_ui_event(event, control_flow, ui_ref.clone());
         delegate(control_flow);
     }
 }
 
-pub fn handle_ui_event<UIType>(event: Event<UserEvent>, control_flow: &mut ControlFlow, ui_ptr: Rc<RefCell<UIType>>)
+pub fn handle_ui_event<UIType>(event: Event<UserEvent>, control_flow: &mut ControlFlow, ui_ref: Rc<RefCell<UIType>>)
 where
     UIType: crate::ui::UserInterface<Browser>,
 {
-    let main_window_id = { ui_ptr.borrow().get_window_id() };
+    let main_window_id = { ui_ref.borrow().get_window_id() };
 
     match event {
         Event::UserEvent(_) => {
@@ -53,7 +51,7 @@ where
             event: WindowEvent::Resized(_size),
             ..
         } => {
-            let ui = ui_ptr.borrow();
+            let ui = ui_ref.borrow();
             ui.update_layout_size(&_size).unwrap();
         }
         Event::WindowEvent {
@@ -61,7 +59,7 @@ where
             ..
         } if input.state == winit::event::ElementState::Pressed => {
             use winit::event::VirtualKeyCode;
-            let ui = ui_ptr.borrow();
+            let ui = ui_ref.borrow();
             let key = input
                 .virtual_keycode
                 .expect("Couldn't identify pressed key.");
@@ -113,7 +111,7 @@ where
     }
 
     if *control_flow == ControlFlow::Exit {
-        let ui = ui_ptr.borrow();
+        let ui = ui_ref.borrow();
         ui.set_main_window_visible(false);
         ui.destroy();
     }

@@ -28,7 +28,7 @@ impl Statistics {
         let db_path = self.repo.get_db_path();
         self.get_worker().run_async(
             move || {
-                let mut conn = rusqlite::Connection::open(db_path).unwrap();
+                let mut conn = rusqlite::Connection::open(db_path).expect(format!("Unable to open DB.").as_str());
                 migrations::migrate(&mut conn)
             },
             Self::unwrap_result_callback(result_cb),
